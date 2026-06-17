@@ -1,0 +1,61 @@
+/* Workflow Studio — global styles. */
+@import "primeicons/primeicons.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+/* Root font-size drives PrimeNG's rem-based sizing — 14px ≈ 88% of the 16px
+   default, scaling all design-system controls. Custom components match. */
+html {
+  font-size: 14px;
+}
+
+/*
+ * Workflow Studio design tokens.
+ * Decoupled from PrimeNG's semantic text tokens, which in the TransfloTheme
+ * slate scale resolve too light for body text. These give us crisp, tunable
+ * contrast for the studio surfaces.
+ */
+:root {
+  --ws-text: #1b2330;          /* primary text — crisp dark slate */
+  --ws-text-muted: #5a626f;    /* secondary text */
+  --ws-text-faint: #8d9aae;    /* icons / tertiary */
+  --ws-border: #c6ccd6;        /* visible card/row borders (slate-500) */
+  --ws-border-strong: #a9b3c2; /* stronger separators (slate-600) */
+  --ws-surface: #ffffff;       /* cards / panels */
+  --ws-canvas: #eaeef3;        /* canvas backdrop — cooler so white cards pop */
+  --ws-dot: #c2cad6;           /* canvas dot grid */
+  --ws-hover: #eef1f6;         /* row/button hover */
+
+  /* selected node (focus) — cyan palette, light bg + dark text */
+  --ws-sel-bg: #e3f5fd;        /* cyan-100 */
+  --ws-sel-bg-soft: #f1fafe;   /* cyan-50 */
+  --ws-sel-border: #3ba6d6;    /* darker cyan for a legible ring */
+  --ws-sel-accent: #72cdf4;    /* cyan-500 accent bar */
+
+  /* active segment (canvas scope) — brand blue, kept distinct from selection */
+  --ws-scope-bg: #e9f1f8;      /* primary-50 */
+  --ws-scope-accent: #2474bb;  /* primary-500 */
+}
+
+body {
+  margin: 0;
+  font-family: var(--p-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif);
+  font-size: 13px;
+  color: var(--ws-text);
+  background: var(--p-surface-ground, #f8fafc);
+}
+
+/* Visible keyboard focus everywhere (Web Interface Guidelines). */
+*:focus-visible {
+  outline: 2px solid var(--ws-sel-border);
+  outline-offset: 2px;
+}
