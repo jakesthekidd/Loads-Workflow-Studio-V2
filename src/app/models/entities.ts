@@ -37,24 +37,70 @@ export interface FleetRef {
   readonly name: string;
 }
 
+// ─── Condition model ──────────────────────────────────────────────────────────
+
+/** Which data source a condition field reference points to. */
+export type ConditionSourceType = 'workflow' | 'geotab' | 'json';
+
 /**
- * A completion condition. Phase 1 models it only as an opaque, identifiable
- * record; the expression language / evaluation is a later phase.
+ * A resolved reference to a field in one of the three data sources.
+ * Shape mirrors SelectedValue from DataSourceSelectorComponent so the picker
+ * can bind directly to this type.
  */
-export interface CompletionCondition {
+export interface ConditionFieldRef {
+  readonly source: ConditionSourceType;
   readonly id: string;
-  readonly description?: string;
-  // TODO (Phase N): typed condition expression (operands, operators, references).
+  readonly label: string;
+  /** Parent label breadcrumb (Segment > Step for workflow; path for JSON). */
+  readonly path?: readonly string[];
+  /** Action type label (workflow) or JSON value type. */
+  readonly type?: string;
+}
+
+export type ConditionOperator =
+  | 'IsEqualTo'
+  | 'IsNotEqualTo'
+  | 'Contains'
+  | 'DoesNotContain'
+  | 'IsEmpty'
+  | 'IsNotEmpty'
+  | 'GreaterThan'
+  | 'LessThan';
+
+export interface ConditionRule {
+  readonly id: string;
+  readonly field: ConditionFieldRef;
+  readonly operator: ConditionOperator;
+  readonly value: string | number | boolean | null;
+  /** Logical connector to the NEXT rule within this statement. Absent on the last rule. */
+  readonly connector?: 'AND' | 'OR';
+}
+
+/** A group of rules whose members are joined by per-rule AND/OR connectors. */
+export interface ConditionStatement {
+  readonly id: string;
+  readonly rules: readonly ConditionRule[];
+  /** Logical connector to the NEXT statement. Absent on the last statement. */
+  readonly connector?: 'AND' | 'OR';
+}
+
+/** Top-level condition — one or more statements joined by per-statement AND/OR connectors. */
+export interface ConditionGroup {
+  readonly enabled: boolean;
+  readonly statements: readonly ConditionStatement[];
 }
 
 /**
- * A blocker gates a node until cleared. Modeled as data in Phase 1.
- * OUT OF SCOPE: a blocker on an unenforced-order Step — do not build that path.
+ * A blocking condition gates a node. The node is unblocked automatically
+ * as soon as `condition` evaluates to true — there is no manual-clear path.
+ * OUT OF SCOPE: a blocker on an unenforced-order Step.
  */
-export interface Blocker {
-  readonly id: string;
-  readonly message: string;
-  // TODO (Phase N): clearing condition.
+export interface BlockingCondition {
+  readonly enabled: boolean;
+  /** Message shown to the driver while the node is blocked. */
+  readonly message?: string;
+  /** The condition that must become true to unblock. */
+  readonly condition: ConditionGroup;
 }
 
 /** 2D position on the canvas (set by @foblex/flow drag interactions). */
@@ -75,7 +121,13 @@ export interface OrderedNode {
   readonly orderEnforcement: OrderEnforcement;
   /** Zero-based position among siblings (authoring order / enforced sequence). */
   readonly sortIndex: number;
-  readonly completionConditions: readonly CompletionCondition[];
+  /** Show/hide condition — node is shown only when this evaluates to true. */
+  readonly condition?: ConditionGroup;
+  /**
+   * Blocking condition — node is locked until `blocker.condition` is true.
+   * OUT OF SCOPE when orderEnforcement is Unenforced.
+   */
+  readonly blocker?: BlockingCondition;
   readonly statusMessage?: string;
   /** Runtime state — DATA ONLY in Phase 1 (see {@link NodeRuntimeState}). */
   readonly runtimeState?: NodeRuntimeState;
@@ -109,8 +161,6 @@ export interface Step extends OrderedNode {
   readonly segmentId: string;
   readonly label: string;
   readonly prompt?: string;
-  /** OUT OF SCOPE when {@link OrderedNode.orderEnforcement} is Unenforced. */
-  readonly blocker?: Blocker;
   readonly actions: readonly Action[];
 }
 

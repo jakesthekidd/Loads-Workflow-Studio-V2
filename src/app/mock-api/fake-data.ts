@@ -41,7 +41,7 @@ const PICK_UP: Workflow = {
       requirement: RequirementLevel.Required,
       orderEnforcement: OrderEnforcement.Enforced,
       sortIndex: 0,
-      completionConditions: [],
+      
       statusMessage: 'Begin the load.',
       steps: [
         {
@@ -51,7 +51,7 @@ const PICK_UP: Workflow = {
           requirement: RequirementLevel.Optional,
           orderEnforcement: OrderEnforcement.Enforced,
           sortIndex: 0,
-          completionConditions: [],
+          
           prompt: 'Complete the pre-trip inspection before departing.',
           runtimeState: NodeRuntimeState.Completed,
           actions: [
@@ -78,6 +78,7 @@ const PICK_UP: Workflow = {
             },
             { id: 'act-pt-geotab', stepId: 'stp-pretrip', label: 'Launch Geotab', sortIndex: 4, config: { actionType: ActionType.LaunchGeotabSDK } },
             { id: 'act-pt-submit', stepId: 'stp-pretrip', label: 'Submit', sortIndex: 5, config: { actionType: ActionType.SimpleButton } },
+            { id: 'act-pt-sbs', stepId: 'stp-pretrip', label: 'Accept / Decline', sortIndex: 6, config: { actionType: ActionType.SideBySideButtons, button1Text: 'Accept', button2Text: 'Decline' } },
           ],
         },
         {
@@ -87,9 +88,13 @@ const PICK_UP: Workflow = {
           requirement: RequirementLevel.Required,
           orderEnforcement: OrderEnforcement.Enforced,
           sortIndex: 1,
-          completionConditions: [],
+          
           prompt: 'Confirm arrival at the shipper.',
-          blocker: { id: 'blk-arrive', message: 'Must be within the shipper geofence to continue.' },
+          blocker: {
+            enabled: true,
+            message: 'Must be within the shipper geofence to continue.',
+            condition: { enabled: true, statements: [{ id: 'blk-stmt-1', rules: [] }] },
+          },
           runtimeState: NodeRuntimeState.Active,
           actions: [
             {
@@ -112,7 +117,7 @@ const PICK_UP: Workflow = {
       requirement: RequirementLevel.Optional,
       orderEnforcement: OrderEnforcement.Unenforced,
       sortIndex: 1,
-      completionConditions: [],
+      
       steps: [
         {
           id: 'stp-fuel',
@@ -121,7 +126,7 @@ const PICK_UP: Workflow = {
           requirement: RequirementLevel.Optional,
           orderEnforcement: OrderEnforcement.Unenforced,
           sortIndex: 0,
-          completionConditions: [],
+          
           actions: [
             { id: 'act-fu-gal', stepId: 'stp-fuel', label: 'Gallons', sortIndex: 0, config: { actionType: ActionType.NumericField } },
             { id: 'act-fu-lvl', stepId: 'stp-fuel', label: 'Tank Level', sortIndex: 1, config: { actionType: ActionType.Slider, min: 0, max: 100, step: 5, defaultValue: 50, unitLabel: '%' } },
@@ -137,7 +142,7 @@ const PICK_UP: Workflow = {
       requirement: RequirementLevel.Required,
       orderEnforcement: OrderEnforcement.Enforced,
       sortIndex: 2,
-      completionConditions: [],
+      
       steps: [
         {
           id: 'stp-depart',
@@ -146,7 +151,7 @@ const PICK_UP: Workflow = {
           requirement: RequirementLevel.Required,
           orderEnforcement: OrderEnforcement.Enforced,
           sortIndex: 0,
-          completionConditions: [],
+          
           actions: [
             { id: 'act-dp-act', stepId: 'stp-depart', label: 'Record Departure', sortIndex: 0, config: { actionType: ActionType.StopActualization } },
             { id: 'act-dp-cc', stepId: 'stp-depart', label: 'Send Check-call', sortIndex: 1, config: { actionType: ActionType.SendCheckcall } },
@@ -159,7 +164,7 @@ const PICK_UP: Workflow = {
           requirement: RequirementLevel.Required,
           orderEnforcement: OrderEnforcement.Enforced,
           sortIndex: 1,
-          completionConditions: [],
+          
           actions: [
             { id: 'act-pod-head', stepId: 'stp-pod', label: 'POD', sortIndex: 0, config: { actionType: ActionType.Label } },
             { id: 'act-pod-cfm', stepId: 'stp-pod', label: 'Confirm Delivery', sortIndex: 1, config: { actionType: ActionType.Checkbox, required: true } },
@@ -200,7 +205,7 @@ const DROP_HOOK: Workflow = {
       requirement: RequirementLevel.Required,
       orderEnforcement: OrderEnforcement.Enforced,
       sortIndex: 0,
-      completionConditions: [],
+      
       steps: [
         {
           id: 'stp-dh-drop',
@@ -209,7 +214,7 @@ const DROP_HOOK: Workflow = {
           requirement: RequirementLevel.Required,
           orderEnforcement: OrderEnforcement.Enforced,
           sortIndex: 0,
-          completionConditions: [],
+          
           actions: [
             { id: 'act-dh-loc', stepId: 'stp-dh-drop', label: 'Drop Location', sortIndex: 0, config: { actionType: ActionType.GetDeviceLocation } },
             { id: 'act-dh-cfm', stepId: 'stp-dh-drop', label: 'Confirm Disconnected', sortIndex: 1, config: { actionType: ActionType.Checkbox } },
@@ -252,7 +257,7 @@ export const SEED_STEP_TEMPLATES: readonly StepTemplate[] = [
       label: 'Begin Load',
       requirement: RequirementLevel.Required,
       orderEnforcement: OrderEnforcement.Enforced,
-      completionConditions: [],
+      
       actions: [
         { label: 'Check In', config: { actionType: ActionType.SimpleButton } },
         { label: 'Capture Location', config: { actionType: ActionType.GetDeviceLocation } },
@@ -269,7 +274,7 @@ export const SEED_STEP_TEMPLATES: readonly StepTemplate[] = [
       label: 'Arrive at Shipper',
       requirement: RequirementLevel.Required,
       orderEnforcement: OrderEnforcement.Enforced,
-      completionConditions: [],
+      
       actions: [
         { label: 'Shipper Geofence', config: { actionType: ActionType.TriggerGeofence, latitude: 0, longitude: 0, radiusMeters: 150, trigger: 'enter' } },
         { label: 'Arrival Time', config: { actionType: ActionType.Time } },
@@ -286,7 +291,7 @@ export const SEED_STEP_TEMPLATES: readonly StepTemplate[] = [
       label: 'Weigh Station',
       requirement: RequirementLevel.Optional,
       orderEnforcement: OrderEnforcement.Unenforced,
-      completionConditions: [],
+      
       actions: [{ label: 'Gross Weight', config: { actionType: ActionType.NumericField } }],
     },
   },

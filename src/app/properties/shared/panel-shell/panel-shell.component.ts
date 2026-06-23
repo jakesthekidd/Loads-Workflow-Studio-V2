@@ -5,6 +5,7 @@ import {
   input,
   output,
 } from '@angular/core';
+import { NodeKind } from '@app/models';
 import { WorkflowStudioStore } from '@app/services';
 
 @Component({
@@ -12,183 +13,256 @@ import { WorkflowStudioStore } from '@app/services';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="shell">
-      <!-- Collapse handle tab -->
-      <button class="shell__tab" type="button" (click)="store.closeProperties()" aria-label="Close panel">
-        <i class="pi pi-angle-left"></i>
-      </button>
 
-      <!-- Main card -->
-      <div class="shell__card">
-        <!-- Header -->
-        <div class="shell__header">
-          <div class="shell__header-left">
-            @if (stepName()) {
-              <p class="shell__step-name">{{ stepName() }}</p>
-            }
-            <div class="shell__title-row">
-              <h2 class="shell__title">{{ title() }}</h2>
-              @if (typeBadge()) {
-                <span class="shell__badge">{{ typeBadge() }}</span>
+      <!-- Header — #f6f9fc background, 3-row layout, bottom border -->
+      <div class="shell__header">
+
+        <!-- Row 1: breadcrumb trail + × close -->
+        <div class="shell__header-top">
+          <nav class="shell__trail" aria-label="Panel location">
+            @for (crumb of store.panelBreadcrumbs(); track crumb.id; let last = $last) {
+              @if (crumb.kind === NodeKind.Step) {
+                <button
+                  class="trail__item trail__item--link"
+                  type="button"
+                  (click)="store.openProperties(crumb.id)"
+                >{{ crumb.label }}</button>
+              } @else {
+                <span class="trail__item">{{ crumb.label }}</span>
               }
-            </div>
-          </div>
-          <button class="shell__expand" type="button" aria-label="Expand panel">
-            <i class="pi pi-expand"></i>
+              @if (!last) {
+                <i class="trail__sep pi pi-angle-right"></i>
+              }
+            }
+          </nav>
+          <button class="shell__close" type="button" (click)="store.closeProperties()" aria-label="Close panel">
+            <i class="pi pi-times"></i>
           </button>
         </div>
 
-        <!-- Blue divider -->
-        <div class="shell__divider"></div>
-
-        <!-- Content -->
-        <div class="shell__content">
-          <ng-content />
+        <!-- Row 2: [title + angle-down] on left | [type badge] on right -->
+        <div class="shell__title-row">
+          <div class="shell__title-group">
+            <h2 class="shell__title">{{ title() }}</h2>
+            <i class="shell__title-chevron pi pi-angle-down"></i>
+          </div>
+          @if (typeBadge()) {
+            <span class="shell__badge">{{ typeBadge() }}</span>
+          }
         </div>
 
-        <!-- Footer -->
-        <div class="shell__footer">
-          <button class="btn btn--cancel" type="button" (click)="cancel.emit()">Cancel</button>
-          <button class="btn btn--save" type="button" (click)="save.emit()">Save</button>
+        <!-- Row 3: action icon buttons -->
+        <div class="shell__actions">
+          <button class="shell__action" type="button" aria-label="Save as template" (click)="saveTemplate.emit()">
+            <i class="pi pi-bookmark"></i>
+          </button>
+          <button class="shell__action" type="button" aria-label="Duplicate" (click)="duplicate.emit()">
+            <i class="pi pi-copy"></i>
+          </button>
+          <button class="shell__action shell__action--danger" type="button" aria-label="Delete" (click)="delete.emit()">
+            <i class="pi pi-trash"></i>
+          </button>
         </div>
+
       </div>
+
+      <!-- Scrollable content -->
+      <div class="shell__content">
+        <ng-content />
+      </div>
+
+      <!-- Footer -->
+      <div class="shell__footer">
+        <button class="btn btn--cancel" type="button" (click)="cancel.emit()">Cancel</button>
+        <button class="btn btn--save" type="button" (click)="save.emit()">Save</button>
+      </div>
+
     </div>
   `,
   styles: `
     :host {
       display: flex;
-      position: absolute;
-      top: 16px;
-      right: 16px;
-      /* No bottom anchor — panel is content-height, not full-height */
-      width: 478px;
-      z-index: 100;
-      pointer-events: all;
-      filter: drop-shadow(0px 4px 12px rgba(0, 0, 0, 0.15));
+      flex: 1 1 auto;
+      min-height: 0;
+      width: 100%;
     }
 
     .shell {
       display: flex;
-      align-items: stretch;   /* tab stretches to match card height */
-      width: 100%;
-      max-height: calc(100vh - 120px);
-    }
-
-    /* Collapse tab */
-    .shell__tab {
-      flex-shrink: 0;
-      width: 40px;
-      min-height: 78px;       /* no fixed height — stretches with card */
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: var(--p-surface-900, #282e38);
-      border: none;
-      border-radius: 8px 0 0 8px;
-      cursor: pointer;
-      color: white;
-      font-size: 16px;
-    }
-    .shell__tab:hover {
-      background: var(--p-surface-700, #556376);
-    }
-
-    /* Card */
-    .shell__card {
-      flex: 1;
-      min-width: 0;
-      /* no height: 100% — card is content-height */
-      background: white;
-      border-radius: 24px;
-      display: flex;
       flex-direction: column;
+      flex: 1 1 auto;
+      min-height: 0;
+      width: 100%;
       overflow: hidden;
     }
 
-    /* Header */
+    /* ------------------------------------------------------------------ */
+    /* Header                                                               */
+    /* ------------------------------------------------------------------ */
+
     .shell__header {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
+      background: #f6f9fc;
       padding: 16px 16px 8px;
-      background: white;
       flex-shrink: 0;
-    }
-    .shell__header-left {
       display: flex;
       flex-direction: column;
+      gap: 8px;
+      border-bottom: 1px solid #e2e6eb;
+    }
+
+    /* Row 1: breadcrumb + close */
+    .shell__header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .shell__trail {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
       gap: 4px;
       min-width: 0;
     }
-    .shell__step-name {
+    .trail__item {
       margin: 0;
       font-size: 14px;
-      font-weight: 700;
       font-family: Roboto, sans-serif;
-      color: var(--p-surface-300, #9fa9b7);
+      color: #818ea1;
+      white-space: nowrap;
     }
+    .trail__item--link {
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      padding: 0;
+      font-size: 14px;
+      font-family: Roboto, sans-serif;
+      color: #2474bb;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    .trail__item--link:hover { color: #1d5d96; }
+    .trail__sep {
+      font-size: 10px;
+      color: #818ea1;
+    }
+    .shell__close {
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      color: #37404c;
+      font-size: 16px;
+      padding: 4px 6px;
+      border-radius: 4px;
+      flex-shrink: 0;
+      line-height: 1;
+      transition: background 120ms ease, color 120ms ease;
+    }
+    .shell__close:hover {
+      background: #eaeff5;
+      color: #0e2e4b;
+    }
+
+    /* Row 2: title group + badge */
     .shell__title-row {
       display: flex;
-      flex-direction: column;
-      gap: 4px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-width: 0;
+    }
+    .shell__title-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      flex: 1 1 0;
     }
     .shell__title {
       margin: 0;
       font-size: 24px;
       font-weight: 700;
       font-family: Roboto, sans-serif;
-      color: var(--p-surface-900, #282e38);
+      color: #0e2e4b;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      min-width: 0;
     }
+    .shell__title-chevron {
+      color: #818ea1;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+    /* Badge — dark navy pill, same visual weight as the action type
+       tags on the step card rows (matches bg: #0e2e4b spec from Figma) */
     .shell__badge {
       display: inline-flex;
       align-items: center;
-      padding: 2px 8px;
-      background: #dcf2fc;
+      height: 24px;
+      padding: 0 8px;
+      background: #0e2e4b;
       border-radius: 36px;
       font-size: 12px;
       font-family: Roboto, sans-serif;
-      color: #000;
-      align-self: flex-start;
+      font-weight: 400;
+      color: white;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
-    .shell__expand {
+
+    /* Row 3: action buttons */
+    .shell__actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 9px;
+    }
+    .shell__action {
+      width: 24px;
+      height: 24px;
       border: none;
       background: transparent;
       cursor: pointer;
-      color: var(--p-surface-900, #282e38);
-      font-size: 16px;
+      border-radius: 4px;
+      color: #7a8799;
+      font-size: 14px;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       padding: 0;
-      flex-shrink: 0;
+      transition: background 120ms ease, color 120ms ease;
+    }
+    .shell__action:hover {
+      background: #e4edf6;
+      color: #1d5d96;
+    }
+    .shell__action--danger:hover {
+      color: #c41c28;
+      background: #fef2f2;
     }
 
-    /* Divider */
-    .shell__divider {
-      margin: 4px 16px;
-      height: 2px;
-      background: var(--p-primary-700, #1d5d96);
-      border-radius: 40px;
-      flex-shrink: 0;
-    }
+    /* ------------------------------------------------------------------ */
+    /* Content + Footer                                                     */
+    /* ------------------------------------------------------------------ */
 
-    /* Content */
     .shell__content {
       flex: 1;
-      min-height: 0;          /* required: lets flex child scroll instead of expanding */
+      min-height: 0;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
       gap: 8px;
     }
 
-    /* Footer */
     .shell__footer {
       display: flex;
       align-items: center;
       justify-content: flex-end;
       gap: 8px;
       padding: 16px;
-      border-top: 1px solid var(--p-surface-border, #e2e6eb);
+      border-top: 1px solid #e2e6eb;
       flex-shrink: 0;
     }
     .btn {
@@ -200,27 +274,28 @@ import { WorkflowStudioStore } from '@app/services';
       cursor: pointer;
     }
     .btn--cancel {
-      background: var(--p-blue-50, #e9f1f8);
-      border: 1px solid var(--p-blue-600, #2068a8);
-      color: var(--p-blue-600, #2068a8);
+      background: #e9f1f8;
+      border: 1px solid #2068a8;
+      color: #2068a8;
     }
     .btn--save {
-      background: var(--p-blue-600, #2068a8);
-      border: 1px solid var(--p-blue-600, #2068a8);
+      background: #2068a8;
+      border: 1px solid #2068a8;
       color: white;
     }
-    .btn:hover {
-      opacity: 0.9;
-    }
+    .btn:hover { opacity: 0.88; }
   `,
 })
 export class PanelShellComponent {
   protected readonly store = inject(WorkflowStudioStore);
+  protected readonly NodeKind = NodeKind;
 
   readonly title = input.required<string>();
-  readonly stepName = input<string>();
   readonly typeBadge = input<string>();
 
   readonly save = output<void>();
   readonly cancel = output<void>();
+  readonly saveTemplate = output<void>();
+  readonly duplicate = output<void>();
+  readonly delete = output<void>();
 }

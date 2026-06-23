@@ -20,31 +20,23 @@
  */
 
 import { ActionType } from './action-type';
+import { BlockingCondition, ConditionGroup } from './entities';
 
 /**
- * Fields common to every action's config. These three map to the
- * **"Define Action"** block in the Action settings panel (see docs/canvas.md):
+ * Fields common to every action's config. These map to the
+ * **"Define Action"** block in the Action settings panel:
  *  - `required`   → the REQUIRED toggle (distinct from Step requirement).
- *  - `visible`    → the Visible toggle. Confirmed: *nearly every* action has this.
- *  - `conditional`→ the Conditional toggle. A confirmed requirement, but the
- *                   rule language / evaluation is still under design — modeled
- *                   as DATA only for now (no logic this phase).
+ *  - `visible`    → the Visible toggle.
+ *  - `condition`  → show/hide rule (evaluates to true = show).
+ *  - `blocker`    → blocking condition (node locked until condition is true).
  */
 export interface BaseActionConfig {
   readonly required?: boolean;
   readonly visible?: boolean;
-  readonly conditional?: ConditionalRule;
+  readonly condition?: ConditionGroup;
+  readonly blocker?: BlockingCondition;
   /** Help text shown beneath the control / behavior on-device. */
   readonly helpText?: string;
-}
-
-/**
- * Placeholder for an action's conditional (show/hide) rule. The expression
- * model is intentionally unresolved — see docs/data-model.md. Data only.
- */
-export interface ConditionalRule {
-  readonly enabled: boolean;
-  // TODO (Phase N): operands / operators referencing other actions' values.
 }
 
 /** A selectable option for choice-style inputs. */
@@ -70,6 +62,11 @@ export interface SliderConfig extends BaseActionConfig {
   readonly step?: number;
   readonly defaultValue?: number;
   readonly unitLabel?: string;
+  readonly labelText?: string;
+  readonly leftLabel?: string;
+  readonly rightLabel?: string;
+  readonly displayType?: 'numeric' | 'stars';
+  readonly prePopulate?: boolean;
 }
 
 /** INPUT · Single-select dropdown. */
@@ -78,6 +75,13 @@ export interface SingleSelectDropdownConfig extends BaseActionConfig {
   readonly optionsSource: OptionsSource;
   readonly defaultValue?: string;
   readonly placeholder?: string;
+  readonly labelText?: string;
+  readonly options?: readonly SelectOption[];
+  readonly prePopulate?: boolean;
+  readonly prePopulateSource?: string;
+  readonly prePopulateValue?: string;
+  readonly readOnly?: boolean;
+  readonly editableIfNull?: boolean;
 }
 
 /** INPUT · Multi-select dropdown. */
@@ -86,6 +90,13 @@ export interface MultiSelectDropdownConfig extends BaseActionConfig {
   readonly optionsSource: OptionsSource;
   readonly minSelections?: number;
   readonly maxSelections?: number;
+  readonly labelText?: string;
+  readonly options?: readonly SelectOption[];
+  readonly prePopulate?: boolean;
+  readonly prePopulateSource?: string;
+  readonly prePopulateValue?: string;
+  readonly readOnly?: boolean;
+  readonly editableIfNull?: boolean;
 }
 
 /** NON-INPUT · Geofence trigger. */
@@ -103,11 +114,12 @@ export interface TriggerGeofenceConfig extends BaseActionConfig {
 /** NON-INPUT · Timer / stopwatch. */
 export interface TimerStopwatchConfig extends BaseActionConfig {
   readonly actionType: typeof ActionType.TimerStopwatch;
-  readonly mode: 'countdown' | 'stopwatch';
-  /** For countdown mode, the starting duration in seconds. */
+  readonly mode?: 'countdown' | 'stopwatch';
   readonly durationSeconds?: number;
-  /** What starts the timer. */
-  readonly startTrigger: 'manual' | 'stepEnter' | 'geofence';
+  readonly startTriggerType?: 'geofence';
+  readonly startGeofenceId?: string;
+  readonly stopTriggerType?: 'geofence';
+  readonly stopGeofenceId?: string;
 }
 
 /** NON-INPUT · Generate Email (TFLO) — server-generated email from Transflo. */
@@ -202,23 +214,89 @@ export interface GetDeviceLocationConfig extends BaseActionConfig {
 export interface GetELDLocationConfig extends BaseActionConfig {
   readonly actionType: typeof ActionType.GetELDLocation;
   readonly trigger?: 'geofence';
+  readonly geofenceId?: string;
+  readonly promptManualConfirm?: boolean;
 }
 
-export interface LaunchWebviewConfig extends BaseActionConfig { readonly actionType: typeof ActionType.LaunchWebview; /* TODO (Phase 2) */ }
+export interface LaunchWebviewConfig extends BaseActionConfig {
+  readonly actionType: typeof ActionType.LaunchWebview;
+  readonly buttonText?: string;
+  readonly hyperLink?: string;
+}
 
 // INPUT
-export interface TextFieldConfig extends BaseActionConfig { readonly actionType: typeof ActionType.TextField; /* TODO (Phase 2) */ }
+export interface TextFieldConfig extends BaseActionConfig {
+  readonly actionType: typeof ActionType.TextField;
+  readonly labelText?: string;
+  readonly type?: 'short' | 'paragraph';
+  readonly dataType?: 'alpha' | 'numeric' | 'all';
+  readonly prePopulate?: boolean;
+  readonly prePopulateSource?: string;
+  readonly prePopulateValue?: string;
+  readonly readOnly?: boolean;
+  readonly editableIfNull?: boolean;
+  readonly minLengthEnabled?: boolean;
+  readonly minLength?: number;
+}
+
 export interface NumericFieldConfig extends BaseActionConfig { readonly actionType: typeof ActionType.NumericField; /* TODO (Phase 2) */ }
-export interface LabelConfig extends BaseActionConfig { readonly actionType: typeof ActionType.Label; /* TODO (Phase 2) */ }
-export interface RadioButtonConfig extends BaseActionConfig { readonly actionType: typeof ActionType.RadioButton; /* TODO (Phase 2) */ }
-export interface CheckboxConfig extends BaseActionConfig { readonly actionType: typeof ActionType.Checkbox; /* TODO (Phase 2) */ }
-export interface SimpleButtonConfig extends BaseActionConfig { readonly actionType: typeof ActionType.SimpleButton; /* TODO (Phase 2) */ }
+
+export interface LabelConfig extends BaseActionConfig {
+  readonly actionType: typeof ActionType.Label;
+  readonly headingText?: string;
+}
+
+export interface RadioButtonConfig extends BaseActionConfig {
+  readonly actionType: typeof ActionType.RadioButton;
+  readonly labelText?: string;
+  readonly options?: readonly SelectOption[];
+  readonly prePopulate?: boolean;
+  readonly prePopulateSource?: string;
+  readonly prePopulateValue?: string;
+  readonly readOnly?: boolean;
+  readonly editableIfNull?: boolean;
+}
+
+export interface CheckboxConfig extends BaseActionConfig {
+  readonly actionType: typeof ActionType.Checkbox;
+  readonly labelText?: string;
+  readonly options?: readonly SelectOption[];
+  readonly prePopulate?: boolean;
+  readonly prePopulateSource?: string;
+  readonly prePopulateValue?: string;
+  readonly readOnly?: boolean;
+  readonly editableIfNull?: boolean;
+}
+
+export interface SimpleButtonConfig extends BaseActionConfig {
+  readonly actionType: typeof ActionType.SimpleButton;
+  readonly buttonText?: string;
+  readonly buttonAction?: string;
+}
+
+export interface SideBySideButtonsConfig extends BaseActionConfig {
+  readonly actionType: typeof ActionType.SideBySideButtons;
+  readonly button1Text?: string;
+  readonly button1Action?: string;
+  readonly button2Text?: string;
+  readonly button2Action?: string;
+}
+
 export interface DateConfig extends BaseActionConfig { readonly actionType: typeof ActionType.Date; /* TODO (Phase 2) */ }
 export interface DatetimeConfig extends BaseActionConfig { readonly actionType: typeof ActionType.Datetime; /* TODO (Phase 2) */ }
 export interface MultiDateSelectorConfig extends BaseActionConfig { readonly actionType: typeof ActionType.MultiDateSelector; /* TODO (Phase 2) */ }
 export interface TimeConfig extends BaseActionConfig { readonly actionType: typeof ActionType.Time; /* TODO (Phase 2) */ }
 export interface TimeRangeSelectorConfig extends BaseActionConfig { readonly actionType: typeof ActionType.TimeRangeSelector; /* TODO (Phase 2) */ }
-export interface TemperatureFieldConfig extends BaseActionConfig { readonly actionType: typeof ActionType.TemperatureField; /* TODO (Phase 2) */ }
+
+export interface TemperatureFieldConfig extends BaseActionConfig {
+  readonly actionType: typeof ActionType.TemperatureField;
+  readonly labelText?: string;
+  readonly prePopulate?: boolean;
+  readonly prePopulateSource?: string;
+  readonly prePopulateValue?: string;
+  readonly readOnly?: boolean;
+  readonly editableIfNull?: boolean;
+}
 
 // DEFERRED — not for v1
 export interface LaunchEBOLConfig extends BaseActionConfig { readonly actionType: typeof ActionType.LaunchEBOL; /* deferred — not for v1 */ }
@@ -259,6 +337,7 @@ export type ActionConfig =
   | RadioButtonConfig
   | CheckboxConfig
   | SimpleButtonConfig
+  | SideBySideButtonsConfig
   | DateConfig
   | DatetimeConfig
   | MultiDateSelectorConfig

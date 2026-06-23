@@ -7,6 +7,9 @@ import { ChangeDetectionStrategy, Component, input, signal } from '@angular/core
     <div class="section">
       <button class="section__header" type="button" (click)="toggle()">
         <span class="section__title">{{ title() }}</span>
+        <span class="section__header-actions" (click)="$event.stopPropagation()">
+          <ng-content select="[sectionAction]" />
+        </span>
         <i class="pi" [class.pi-chevron-up]="open()" [class.pi-chevron-down]="!open()"></i>
       </button>
       @if (open()) {
@@ -22,7 +25,6 @@ import { ChangeDetectionStrategy, Component, input, signal } from '@angular/core
     .section__header {
       display: flex;
       align-items: center;
-      justify-content: space-between;
       width: 100%;
       padding: 12px 16px;
       background: white;
@@ -30,6 +32,7 @@ import { ChangeDetectionStrategy, Component, input, signal } from '@angular/core
       border-bottom: 1px solid var(--p-surface-border, #e2e6eb);
       cursor: pointer;
       gap: 8px;
+      text-align: left;
     }
 
     .section__title {
@@ -37,6 +40,10 @@ import { ChangeDetectionStrategy, Component, input, signal } from '@angular/core
       font-weight: 700;
       font-family: Roboto, sans-serif;
       color: #000;
+      flex: 1 1 auto;
+    }
+    .section__header-actions {
+      display: flex; align-items: center; gap: 4px; margin-right: 4px;
     }
 
     .section__header i {

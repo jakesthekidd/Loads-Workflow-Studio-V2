@@ -5,10 +5,6 @@ import { WorkflowItemsTree } from '../canvas/workflow-items-tree';
 import { AppHeader } from '../shell/app-header';
 import { AppNavRail } from '../shell/app-nav-rail';
 
-/**
- * Workflow Studio shell: global header on top, 66px app rail on the left, the
- * Workflow Items tree (when open) as a docked column, then the canvas work area.
- */
 @Component({
   selector: 'ws-studio',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -42,6 +38,7 @@ import { AppNavRail } from '../shell/app-nav-rail';
     .ws-studio__work {
       flex: 1 1 auto;
       min-width: 0;
+      position: relative;
     }
   `,
 })

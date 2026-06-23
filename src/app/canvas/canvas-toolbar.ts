@@ -1,7 +1,8 @@
-import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { MenuItem } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { SplitButtonModule } from 'primeng/splitbutton';
+import { WorkflowStudioStore } from '@app/services';
 
 /**
  * Floating canvas toolbar — the main creation + control surface (docs/canvas.md §6).
@@ -36,8 +37,8 @@ import { SplitButtonModule } from 'primeng/splitbutton';
           <!-- View + add-pickers -->
           <div class="ws-toolbar__group">
             <button class="ws-toolbar__icon" type="button" aria-label="Preview"><i class="pi pi-eye"></i></button>
-            <button class="ws-toolbar__icon" type="button" aria-label="Steps"><i class="pi pi-list"></i></button>
-            <button class="ws-toolbar__icon" type="button" aria-label="Components"><i class="pi pi-th-large"></i></button>
+            <button class="ws-toolbar__icon" type="button" aria-label="Steps" (click)="openStepPicker()"><i class="pi pi-list"></i></button>
+            <button class="ws-toolbar__icon" type="button" aria-label="Components" (click)="store.openActionLibrary(null)"><i class="pi pi-th-large"></i></button>
           </div>
 
           <span class="ws-toolbar__divider"></span>
@@ -125,10 +126,16 @@ import { SplitButtonModule } from 'primeng/splitbutton';
   `,
 })
 export class CanvasToolbar {
+  protected readonly store = inject(WorkflowStudioStore);
   protected readonly collapsed = signal(false);
 
   protected toggle(): void {
     this.collapsed.update((v) => !v);
+  }
+
+  protected openStepPicker(): void {
+    const seg = this.store.currentSegment();
+    this.store.openStepPicker(seg?.steps.length ?? 0);
   }
 
   /** Inert placeholder menu for the Save split-button. // TODO (Phase N) */

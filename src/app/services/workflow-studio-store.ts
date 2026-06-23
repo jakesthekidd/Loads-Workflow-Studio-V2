@@ -2,7 +2,11 @@ import { computed, inject, Injectable, signal } from '@angular/core';
 import {
   Action,
   ActionConfig,
+  ACTION_TYPE_CATALOG,
+  ActionType,
   ActionTypeCatalogEntry,
+  BlockingCondition,
+  ConditionGroup,
   NodeKind,
   OrderEnforcement,
   RequirementLevel,
@@ -17,6 +21,40 @@ import {
 import { ActionCatalogApi, StepTemplateApi, WorkflowApi } from '@app/mock-api';
 
 const EMPTY_GRAPH: WorkflowGraph = { nodes: [], connections: [] };
+
+// ---- Step/action creation helpers ----------------------------------------
+
+function defaultConfigFor(type: ActionType): ActionConfig {
+  switch (type) {
+    case ActionType.TriggerGeofence:
+      return { actionType: type, latitude: 0, longitude: 0, radiusMeters: 100 };
+    case ActionType.SingleSelectDropdown:
+    case ActionType.MultiSelectDropdown:
+      return { actionType: type, optionsSource: { kind: 'static', options: [] } };
+    case ActionType.Slider:
+      return { actionType: type, min: 0, max: 100 };
+    default:
+      return { actionType: type } as ActionConfig;
+  }
+}
+
+function blankStep(id: string, segmentId: string, sortIndex: number): Step {
+  return {
+    id, segmentId, label: 'New Step', sortIndex,
+    requirement: RequirementLevel.Required,
+    orderEnforcement: OrderEnforcement.Enforced,
+    actions: [],
+  };
+}
+
+function instantiateTemplate(tpl: StepTemplate, stepId: string, segmentId: string, sortIndex: number): Step {
+  return {
+    ...tpl.blueprint, id: stepId, segmentId, sortIndex,
+    actions: tpl.blueprint.actions.map((a, i) => ({
+      ...a, id: crypto.randomUUID(), stepId, sortIndex: i,
+    })),
+  };
+}
 
 /** Where a node lives in the hierarchy — for resolving the active segment. */
 interface NodeLocation {
@@ -55,6 +93,16 @@ export class WorkflowStudioStore {
   readonly panelOpen = signal(true);
   /** Id of the node whose properties panel is currently open (null = closed). */
   readonly propertiesPanelId = signal<string | null>(null);
+  /** Insertion index in the current segment where the step picker is open (null = closed). */
+  readonly pickerIndex = signal<number | null>(null);
+  /** Whether the action library panel is open. */
+  readonly actionLibraryOpen = signal(false);
+  /** The step id that opened the action library (null = opened from toolbar, drag-only). */
+  readonly actionLibraryTargetStepId = signal<string | null>(null);
+  /** CSS class applied to the content wrapper to trigger directional slide animation. */
+  readonly panelNavAnimClass = signal<string>('');
+  /** True while the panel close animation is playing (before DOM removal). */
+  readonly panelClosing = signal(false);
 
   // ---- derived ------------------------------------------------------------
   readonly segments = computed<readonly Segment[]>(() => this.workflow()?.segments ?? []);
@@ -88,6 +136,53 @@ export class WorkflowStudioStore {
     const seg = this.currentSegment();
     return seg ? toSegmentGraph(seg) : EMPTY_GRAPH;
   });
+
+  /** Ancestor breadcrumb trail for the current properties panel node. */
+  readonly panelBreadcrumbs = computed<ReadonlyArray<{ label: string; id: string; kind: NodeKind }>>(() => {
+    const id = this.propertiesPanelId();
+    if (!id) return [];
+    const loc = this.index().get(id);
+    if (!loc) return [];
+    const seg = this.segments().find((s) => s.id === loc.segmentId);
+    if (!seg) return [];
+    if (loc.kind === NodeKind.Step) {
+      return [{ label: seg.label, id: seg.id, kind: NodeKind.Segment }];
+    }
+    if (loc.kind === NodeKind.Action) {
+      const step = seg.steps.find((s) => s.id === loc.stepId);
+      return step
+        ? [
+            { label: seg.label, id: seg.id, kind: NodeKind.Segment },
+            { label: step.label, id: step.id, kind: NodeKind.Step },
+          ]
+        : [{ label: seg.label, id: seg.id, kind: NodeKind.Segment }];
+    }
+    return [];
+  });
+
+  /** Kind of the node open in the properties panel — drives accent color. */
+  readonly panelItemKind = computed<NodeKind | null>(() => {
+    const id = this.propertiesPanelId();
+    if (!id) return null;
+    return this.index().get(id)?.kind ?? null;
+  });
+
+  /** Workflow tree projected for the DataSourceSelectorComponent (Segment > Step > Action). */
+  readonly dssWorkflowData = computed(() => ({
+    segments: this.segments().map(seg => ({
+      id: seg.id,
+      label: seg.label,
+      steps: seg.steps.map(step => ({
+        id: step.id,
+        label: step.label,
+        actions: step.actions.map(action => ({
+          id: action.id,
+          label: action.label,
+          actionType: action.config.actionType,
+        })),
+      })),
+    })),
+  }));
 
   // ---- actions ------------------------------------------------------------
 
@@ -173,13 +268,41 @@ export class WorkflowStudioStore {
 
   /** Open the properties panel for the given node id and also select it. */
   openProperties(id: string): void {
+    // Cancel any pending close animation so re-opening the same panel doesn't
+    // get silently killed by the close timeout.
+    if (this._closeTimeout) {
+      clearTimeout(this._closeTimeout);
+      this._closeTimeout = null;
+      this.panelClosing.set(false);
+    }
+
+    const currentId = this.propertiesPanelId();
+    if (currentId && currentId !== id) {
+      const diff = this.nodeDepth(id) - this.nodeDepth(currentId);
+      if (diff !== 0) {
+        this._navSeq++;
+        const suffix = this._navSeq % 2 === 0 ? 'b' : 'a';
+        this.panelNavAnimClass.set(diff > 0 ? `nav-fwd-${suffix}` : `nav-bwd-${suffix}`);
+      } else {
+        this.panelNavAnimClass.set('');
+      }
+    } else {
+      this.panelNavAnimClass.set('');
+    }
     this.propertiesPanelId.set(id);
     this.select(id);
   }
 
-  /** Close the properties panel without mutating the workflow. */
+  /** Close the properties panel — plays the slide-out animation then removes from DOM. */
   closeProperties(): void {
-    this.propertiesPanelId.set(null);
+    if (this._closeTimeout) clearTimeout(this._closeTimeout);
+    this.panelClosing.set(true);
+    this._closeTimeout = setTimeout(() => {
+      this.propertiesPanelId.set(null);
+      this.panelNavAnimClass.set('');
+      this.panelClosing.set(false);
+      this._closeTimeout = null;
+    }, 200);
   }
 
   /**
@@ -220,7 +343,7 @@ export class WorkflowStudioStore {
   /** Patch mutable fields on a Step (immutable update). */
   updateStep(
     stepId: string,
-    patch: Partial<Pick<Step, 'requirement' | 'orderEnforcement' | 'prompt' | 'statusMessage'>>,
+    patch: Partial<Pick<Step, 'requirement' | 'orderEnforcement' | 'prompt' | 'statusMessage' | 'condition' | 'blocker'>>,
   ): void {
     const wf = this.workflow();
     if (!wf) return;
@@ -243,7 +366,92 @@ export class WorkflowStudioStore {
     this.panelOpen.update((v) => !v);
   }
 
+  // ---- step picker --------------------------------------------------------
+
+  openStepPicker(insertIndex: number): void {
+    this.pickerIndex.set(insertIndex);
+    this.propertiesPanelId.set(null);
+  }
+
+  closeStepPicker(): void {
+    this.pickerIndex.set(null);
+  }
+
+  addStep(segmentId: string, insertIndex: number, template?: StepTemplate): void {
+    const wf = this.workflow();
+    if (!wf) return;
+    const stepId = crypto.randomUUID();
+    const newStep = template
+      ? instantiateTemplate(template, stepId, segmentId, insertIndex)
+      : blankStep(stepId, segmentId, insertIndex);
+    this.workflow.set({
+      ...wf,
+      segments: wf.segments.map((seg) => {
+        if (seg.id !== segmentId) return seg;
+        const steps = [...seg.steps];
+        steps.splice(insertIndex, 0, newStep);
+        return { ...seg, steps: steps.map((s, i) => ({ ...s, sortIndex: i })) };
+      }),
+    });
+    this.pickerIndex.set(null);
+    const expanded = new Set(this.expandedIds());
+    expanded.add(stepId);
+    this.expandedIds.set(expanded);
+    this.openProperties(stepId);
+  }
+
+  // ---- action library -----------------------------------------------------
+
+  openActionLibrary(stepId: string | null): void {
+    this.actionLibraryTargetStepId.set(stepId);
+    this.actionLibraryOpen.set(true);
+  }
+
+  closeActionLibrary(): void {
+    this.actionLibraryOpen.set(false);
+    this.actionLibraryTargetStepId.set(null);
+  }
+
+  addAction(stepId: string, type: ActionType): void {
+    const wf = this.workflow();
+    if (!wf) return;
+    const actionId = crypto.randomUUID();
+    this.workflow.set({
+      ...wf,
+      segments: wf.segments.map((seg) => ({
+        ...seg,
+        steps: seg.steps.map((step) => {
+          if (step.id !== stepId) return step;
+          const newAction: Action = {
+            id: actionId,
+            stepId,
+            sortIndex: step.actions.length,
+            label: ACTION_TYPE_CATALOG[type].label,
+            config: defaultConfigFor(type),
+          };
+          return { ...step, actions: [...step.actions, newAction] };
+        }),
+      })),
+    });
+    this.closeActionLibrary();
+    const expanded = new Set(this.expandedIds());
+    expanded.add(stepId);
+    this.expandedIds.set(expanded);
+    this.openProperties(actionId);
+  }
+
   // ---- internal -----------------------------------------------------------
+
+  private _navSeq = 0;
+  private _closeTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  private nodeDepth(id: string): number {
+    const kind = this.index().get(id)?.kind;
+    if (kind === NodeKind.Segment) return 0;
+    if (kind === NodeKind.Step) return 1;
+    if (kind === NodeKind.Action) return 2;
+    return 0;
+  }
 
   private loadWorkflow(id: string): void {
     this.loading.set(true);

@@ -1,17 +1,12 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
-import { ACTION_TYPE_CATALOG, Action, RequirementLevel, Step } from '@app/models';
+import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
+import { ACTION_TYPE_CATALOG, Action, ActionType, RequirementLevel, Step } from '@app/models';
 import { WorkflowStudioStore } from '@app/services';
 
-/**
- * A Step rendered as a card on the canvas. The Step is the container; its
- * Actions are the rows inside. The card's accent + ring reflect the shared
- * selection (selecting here also highlights the matching tree row).
- */
 @Component({
   selector: 'ws-step-card',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="card" [class.is-selected]="selected()">
+    <div class="card" [class.is-selected]="selected()" [class.has-selected-action]="hasSelectedAction()" [class.is-dragover]="isDragover()" (dragover)="onDragOver($event)" (dragleave)="onDragLeave()" (drop)="onDrop($event)">
       <header class="card__head" (click)="store.select(step().id)">
         <button class="card__chev" type="button" [class.card__chev--collapsed]="collapsed()" (click)="$event.stopPropagation(); store.toggleExpand(step().id)" [attr.aria-label]="collapsed() ? 'Expand step' : 'Collapse step'"><i class="pi pi-chevron-down"></i></button>
         <span class="card__title"><span class="card__num">Step {{ index() }}:</span> {{ step().label }}</span>
@@ -19,7 +14,27 @@ import { WorkflowStudioStore } from '@app/services';
           <button class="ico" type="button" [disabled]="index() === 1" (click)="store.reorderStep(segmentId(), index() - 1, index() - 2)" aria-label="Move step up"><i class="pi pi-arrow-up"></i></button>
           <button class="ico" type="button" [disabled]="index() === totalSteps()" (click)="store.reorderStep(segmentId(), index() - 1, index())" aria-label="Move step down"><i class="pi pi-arrow-down"></i></button>
           <span class="pill" [class.pill--optional]="isOptional()" [class.pill--required]="!isOptional()">{{ step().requirement }}</span>
-          <button class="ico" type="button" aria-label="Hierarchy"><i class="pi pi-sitemap"></i></button>
+          <!-- Condition state button — replaces separate badges + hierarchy icon -->
+          <button
+            type="button"
+            class="cond-btn"
+            [class.cond-btn--cond]="hasCondition() && !hasBlocker()"
+            [class.cond-btn--blk]="hasBlocker() && !hasCondition()"
+            [class.cond-btn--both]="hasCondition() && hasBlocker()"
+            [title]="condBtnTitle()"
+            (click)="store.openProperties(step().id)"
+          >
+            @if (hasCondition() && hasBlocker()) {
+              <i class="pi pi-share-alt cond-icon--cond"></i>
+              <i class="pi pi-ban cond-icon--blk"></i>
+            } @else if (hasCondition()) {
+              <i class="pi pi-share-alt"></i>
+            } @else if (hasBlocker()) {
+              <i class="pi pi-ban"></i>
+            } @else {
+              <i class="pi pi-share-alt"></i>
+            }
+          </button>
           <button class="ico" type="button" (click)="store.openProperties(step().id)" aria-label="Step properties"><i class="pi pi-ellipsis-v"></i></button>
         </span>
       </header>
@@ -36,13 +51,33 @@ import { WorkflowStudioStore } from '@app/services';
                 <button class="ico" type="button" [disabled]="$index === 0" (click)="$event.stopPropagation(); store.reorderAction(step().id, $index, $index - 1)" aria-label="Move action up"><i class="pi pi-arrow-up"></i></button>
                 <button class="ico" type="button" [disabled]="$index === step().actions.length - 1" (click)="$event.stopPropagation(); store.reorderAction(step().id, $index, $index + 1)" aria-label="Move action down"><i class="pi pi-arrow-down"></i></button>
               </span>
-              <button class="ico" type="button" (click)="$event.stopPropagation()" aria-label="Hierarchy"><i class="pi pi-sitemap"></i></button>
+              <!-- Condition state button for action row -->
+              <button
+                type="button"
+                class="cond-btn cond-btn--sm"
+                [class.cond-btn--cond]="actionHasCondition(action) && !actionHasBlocker(action)"
+                [class.cond-btn--blk]="actionHasBlocker(action) && !actionHasCondition(action)"
+                [class.cond-btn--both]="actionHasCondition(action) && actionHasBlocker(action)"
+                [title]="actionCondTitle(action)"
+                (click)="$event.stopPropagation(); store.openProperties(action.id)"
+              >
+                @if (actionHasCondition(action) && actionHasBlocker(action)) {
+                  <i class="pi pi-share-alt cond-icon--cond"></i>
+                  <i class="pi pi-ban cond-icon--blk"></i>
+                } @else if (actionHasCondition(action)) {
+                  <i class="pi pi-share-alt"></i>
+                } @else if (actionHasBlocker(action)) {
+                  <i class="pi pi-ban"></i>
+                } @else {
+                  <i class="pi pi-share-alt"></i>
+                }
+              </button>
               <button class="ico" type="button" (click)="$event.stopPropagation(); store.openProperties(action.id)" aria-label="Action properties"><i class="pi pi-ellipsis-v"></i></button>
             </div>
           }
         </div>
 
-        <button class="card__add" type="button" (click)="$event.stopPropagation()">
+        <button class="card__add" type="button" (click)="$event.stopPropagation(); store.openActionLibrary(step().id)">
           <i class="pi pi-plus-circle"></i>
           Add Action
         </button>
@@ -62,7 +97,25 @@ import { WorkflowStudioStore } from '@app/services';
     .card.is-selected {
       border-color: var(--ws-sel-border, #3ba6d6);
       border-left-color: var(--ws-sel-accent, #72cdf4);
-      box-shadow: 0 0 0 2px var(--ws-sel-bg, #e3f5fd), 0 6px 16px rgb(20 30 50 / 14%);
+      box-shadow:
+        0 0 0 3px var(--ws-sel-bg, #e3f5fd),
+        0 0 0 5px var(--ws-sel-border, #3ba6d6),
+        0 8px 24px rgb(20 30 50 / 20%);
+    }
+    .card.has-selected-action {
+      border-color: var(--ws-sel-border, #3ba6d6);
+      border-left-color: var(--ws-sel-accent, #72cdf4);
+      box-shadow:
+        0 0 0 2px var(--ws-sel-bg, #e3f5fd),
+        0 6px 16px rgb(20 30 50 / 14%);
+    }
+    .card.is-dragover {
+      border-color: var(--p-primary-400, #4da6d9);
+      border-left-color: var(--p-primary-400, #4da6d9);
+      box-shadow:
+        0 0 0 3px var(--ws-sel-bg, #e3f5fd),
+        0 0 0 5px var(--p-primary-400, #4da6d9),
+        0 8px 24px rgb(20 30 50 / 20%);
     }
 
     .card__head { display: flex; align-items: center; gap: 8px; height: 40px; cursor: pointer; }
@@ -135,6 +188,31 @@ import { WorkflowStudioStore } from '@app/services';
     }
     .card__add:hover { background: var(--ws-hover, #eef1f6); }
 
+    /* ── Condition state button ───────────────────────────────────────────── */
+    /* Replaces both the separate amber/red badges and the hierarchy (sitemap)
+       button. Always visible; appearance communicates which conditions are set. */
+    .cond-btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 2px;
+      min-width: 26px; height: 26px; padding: 0 5px;
+      border: none; border-radius: 4px;
+      background: transparent; color: var(--ws-text-faint, #8d9aae);
+      font-size: 11px; cursor: pointer; flex-shrink: 0;
+    }
+    .cond-btn:hover { background: var(--ws-hover, #eef1f6); color: var(--ws-text, #1b2330); }
+    /* Conditional-only: pink */
+    .cond-btn--cond { background: #FCE7F3; color: #9D174D; }
+    .cond-btn--cond:hover { background: #FBCFE8; }
+    /* Blocker-only: orange */
+    .cond-btn--blk { background: #FFEDD5; color: #C2410C; }
+    .cond-btn--blk:hover { background: #FED7AA; }
+    /* Both — each icon keeps its own color chip */
+    .cond-btn--both { background: transparent; padding: 0 3px; }
+    .cond-btn--both:hover { background: var(--ws-hover, #eef1f6); }
+    .cond-icon--cond { color: #9D174D; background: #FCE7F3; border-radius: 3px; padding: 2px 3px; line-height: 1; }
+    .cond-icon--blk  { color: #C2410C; background: #FFEDD5; border-radius: 3px; padding: 2px 3px; line-height: 1; }
+    /* Smaller variant for action rows */
+    .cond-btn--sm { min-width: 22px; height: 22px; font-size: 10px; }
+
     .ico {
       display: inline-flex;
       align-items: center;
@@ -164,8 +242,54 @@ export class StepCard {
   protected readonly selected = computed(() => this.store.isSelected(this.step().id));
   protected readonly collapsed = computed(() => !this.store.isExpanded(this.step().id));
   protected readonly isOptional = computed(() => this.step().requirement === RequirementLevel.Optional);
+  protected readonly hasSelectedAction = computed(() =>
+    this.step().actions.some((a) => this.store.isSelected(a.id)),
+  );
+  protected readonly hasCondition = computed(() => !!this.step().condition?.enabled);
+  protected readonly hasBlocker   = computed(() => !!this.step().blocker?.enabled);
+
+  protected readonly condBtnTitle = computed(() => {
+    const c = this.hasCondition(), b = this.hasBlocker();
+    if (c && b) return 'Has conditional + blocker — click to edit';
+    if (c) return 'Has conditional — click to edit';
+    if (b) return 'Has blocker — click to edit';
+    return 'Set conditions';
+  });
+
+  protected actionHasCondition(action: Action): boolean {
+    return !!action.config.condition?.enabled;
+  }
+  protected actionHasBlocker(action: Action): boolean {
+    return !!action.config.blocker?.enabled;
+  }
+  protected actionCondTitle(action: Action): string {
+    const c = this.actionHasCondition(action), b = this.actionHasBlocker(action);
+    if (c && b) return 'Has conditional + blocker — click to edit';
+    if (c) return 'Has conditional — click to edit';
+    if (b) return 'Has blocker — click to edit';
+    return 'Set conditions';
+  }
 
   protected typeLabel(action: Action): string {
     return ACTION_TYPE_CATALOG[action.config.actionType].label;
+  }
+
+  // ── Drag-and-drop drop zone ───────────────────────────────────────────────
+  protected readonly isDragover = signal(false);
+
+  protected onDragOver(e: DragEvent): void {
+    e.preventDefault();
+    this.isDragover.set(true);
+  }
+
+  protected onDragLeave(): void {
+    this.isDragover.set(false);
+  }
+
+  protected onDrop(e: DragEvent): void {
+    e.preventDefault();
+    this.isDragover.set(false);
+    const type = e.dataTransfer?.getData('text/ws-action-type') as ActionType | undefined;
+    if (type) this.store.addAction(this.step().id, type);
   }
 }
