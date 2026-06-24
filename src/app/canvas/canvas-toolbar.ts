@@ -4,18 +4,6 @@ import { ButtonModule } from 'primeng/button';
 import { SplitButtonModule } from 'primeng/splitbutton';
 import { WorkflowStudioStore } from '@app/services';
 
-/**
- * Floating canvas toolbar — the main creation + control surface (docs/canvas.md §6).
- *
- * Two states (Figma "Tool bar" component):
- *  - **Expanded**: view + add-pickers (Steps / Components), settings, undo/redo,
- *    Run, Save▾.
- *  - **Collapsed**: just Run + Save▾.
- * The chevron handle toggles between them.
- *
- * SKELETON: controls are INERT apart from the collapse toggle.
- * // TODO (Phase N): wire pickers, settings, undo/redo, Run, Save actions.
- */
 @Component({
   selector: 'ws-canvas-toolbar',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -36,9 +24,30 @@ import { WorkflowStudioStore } from '@app/services';
         @if (!collapsed()) {
           <!-- View + add-pickers -->
           <div class="ws-toolbar__group">
-            <button class="ws-toolbar__icon" type="button" aria-label="Preview"><i class="pi pi-eye"></i></button>
-            <button class="ws-toolbar__icon" type="button" aria-label="Steps" (click)="openStepPicker()"><i class="pi pi-list"></i></button>
-            <button class="ws-toolbar__icon" type="button" aria-label="Components" (click)="store.openActionLibrary(null)"><i class="pi pi-th-large"></i></button>
+            <button class="ws-toolbar__icon" type="button" aria-label="Preview">
+              <i class="pi pi-eye"></i>
+            </button>
+            <button
+              class="ws-toolbar__icon"
+              [class.ws-toolbar__icon--active]="store.stepLibraryOpen()"
+              type="button"
+              aria-label="Template Steps"
+              (click)="toggleStepLibrary()"
+            >
+              <i class="pi pi-list-check"></i>
+            </button>
+            <button
+              class="ws-toolbar__icon"
+              [class.ws-toolbar__icon--active]="store.actionLibraryOpen()"
+              type="button"
+              aria-label="Components"
+              (click)="toggleActionLibrary()"
+            >
+              <i class="pi pi-th-large"></i>
+            </button>
+            <button class="ws-toolbar__icon" type="button" aria-label="Connections">
+              <i class="pi pi-share-alt"></i>
+            </button>
           </div>
 
           <span class="ws-toolbar__divider"></span>
@@ -90,22 +99,34 @@ import { WorkflowStudioStore } from '@app/services';
       border-radius: 8px;
       box-shadow: 0 4px 16px rgb(20 30 50 / 12%);
     }
-    .ws-toolbar__group { display: flex; align-items: center; gap: 14px; }
+    .ws-toolbar__group { display: flex; align-items: center; gap: 6px; }
     .ws-toolbar__divider { width: 1px; height: 29px; background: var(--ws-border, #c6ccd6); }
     .ws-toolbar__icon {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 38px;
-      height: 38px;
+      width: 36px;
+      height: 36px;
       border: none;
-      border-radius: 4px;
+      border-radius: 8px;
       background: transparent;
-      color: var(--ws-text, #1b2330);
-      font-size: 18px;
+      color: var(--ws-text-muted, #5a626f);
+      font-size: 17px;
       cursor: pointer;
+      transition: background 120ms, color 120ms;
     }
-    .ws-toolbar__icon:hover { background: var(--ws-hover, #eef1f6); }
+    .ws-toolbar__icon:hover {
+      background: var(--ws-hover, #eef1f6);
+      color: var(--ws-text, #1b2330);
+    }
+    .ws-toolbar__icon--active {
+      background: var(--p-primary-500, #2474bb);
+      color: #fff;
+    }
+    .ws-toolbar__icon--active:hover {
+      background: var(--p-primary-600, #1b5f99);
+      color: #fff;
+    }
     .ws-toolbar__history { display: inline-flex; border: 1px solid var(--ws-border, #c6ccd6); border-radius: 4px; overflow: hidden; }
     .ws-toolbar__cell {
       display: inline-flex;
@@ -133,12 +154,22 @@ export class CanvasToolbar {
     this.collapsed.update((v) => !v);
   }
 
-  protected openStepPicker(): void {
-    const seg = this.store.currentSegment();
-    this.store.openStepPicker(seg?.steps.length ?? 0);
+  protected toggleStepLibrary(): void {
+    if (this.store.stepLibraryOpen()) {
+      this.store.closeStepLibrary();
+    } else {
+      this.store.openStepLibrary();
+    }
   }
 
-  /** Inert placeholder menu for the Save split-button. // TODO (Phase N) */
+  protected toggleActionLibrary(): void {
+    if (this.store.actionLibraryOpen()) {
+      this.store.closeActionLibrary();
+    } else {
+      this.store.openActionLibrary(null);
+    }
+  }
+
   protected readonly saveOptions: MenuItem[] = [
     { label: 'Save' },
     { label: 'Save & Publish' },

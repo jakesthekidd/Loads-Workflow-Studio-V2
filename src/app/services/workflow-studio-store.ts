@@ -99,6 +99,8 @@ export class WorkflowStudioStore {
   readonly actionLibraryOpen = signal(false);
   /** The step id that opened the action library (null = opened from toolbar, drag-only). */
   readonly actionLibraryTargetStepId = signal<string | null>(null);
+  /** Whether the step template library panel is open. */
+  readonly stepLibraryOpen = signal(false);
   /** CSS class applied to the content wrapper to trigger directional slide animation. */
   readonly panelNavAnimClass = signal<string>('');
   /** True while the panel close animation is playing (before DOM removal). */
@@ -400,9 +402,19 @@ export class WorkflowStudioStore {
     this.openProperties(stepId);
   }
 
+  // ---- step library -------------------------------------------------------
+
+  openStepLibrary(): void {
+    this.actionLibraryOpen.set(false);
+    this.actionLibraryTargetStepId.set(null);
+    this.stepLibraryOpen.set(true);
+  }
+  closeStepLibrary(): void { this.stepLibraryOpen.set(false); }
+
   // ---- action library -----------------------------------------------------
 
   openActionLibrary(stepId: string | null): void {
+    this.stepLibraryOpen.set(false);
     this.actionLibraryTargetStepId.set(stepId);
     this.actionLibraryOpen.set(true);
   }

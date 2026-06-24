@@ -40,7 +40,7 @@ import { WorkflowStudioStore } from '@app/services';
           </button>
         </div>
 
-        <!-- Row 2: [title + angle-down] on left | [type badge] on right -->
+        <!-- Row 2: title + badge + action buttons all inline -->
         <div class="shell__title-row">
           <div class="shell__title-group">
             <h2 class="shell__title">{{ title() }}</h2>
@@ -49,19 +49,17 @@ import { WorkflowStudioStore } from '@app/services';
           @if (typeBadge()) {
             <span class="shell__badge">{{ typeBadge() }}</span>
           }
-        </div>
-
-        <!-- Row 3: action icon buttons -->
-        <div class="shell__actions">
-          <button class="shell__action" type="button" aria-label="Save as template" (click)="saveTemplate.emit()">
-            <i class="pi pi-bookmark"></i>
-          </button>
-          <button class="shell__action" type="button" aria-label="Duplicate" (click)="duplicate.emit()">
-            <i class="pi pi-copy"></i>
-          </button>
-          <button class="shell__action shell__action--danger" type="button" aria-label="Delete" (click)="delete.emit()">
-            <i class="pi pi-trash"></i>
-          </button>
+          <div class="shell__actions">
+            <button class="shell__action" type="button" aria-label="Save as template" (click)="saveTemplate.emit()">
+              <i class="pi pi-bookmark"></i>
+            </button>
+            <button class="shell__action" type="button" aria-label="Duplicate" (click)="duplicate.emit()">
+              <i class="pi pi-copy"></i>
+            </button>
+            <button class="shell__action shell__action--danger" type="button" aria-label="Delete" (click)="delete.emit()">
+              <i class="pi pi-trash"></i>
+            </button>
+          </div>
         </div>
 
       </div>
@@ -102,11 +100,11 @@ import { WorkflowStudioStore } from '@app/services';
 
     .shell__header {
       background: #f6f9fc;
-      padding: 16px 16px 8px;
+      padding: 10px 16px 10px;
       flex-shrink: 0;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 6px;
       border-bottom: 1px solid #e2e6eb;
     }
 
@@ -125,7 +123,7 @@ import { WorkflowStudioStore } from '@app/services';
     }
     .trail__item {
       margin: 0;
-      font-size: 14px;
+      font-size: 12px;
       font-family: Roboto, sans-serif;
       color: #818ea1;
       white-space: nowrap;
@@ -135,7 +133,7 @@ import { WorkflowStudioStore } from '@app/services';
       background: transparent;
       cursor: pointer;
       padding: 0;
-      font-size: 14px;
+      font-size: 12px;
       font-family: Roboto, sans-serif;
       color: #2474bb;
       text-decoration: underline;
@@ -163,24 +161,23 @@ import { WorkflowStudioStore } from '@app/services';
       color: #0e2e4b;
     }
 
-    /* Row 2: title group + badge */
+    /* Row 2: title group + badge + actions */
     .shell__title-row {
       display: flex;
       align-items: center;
-      justify-content: space-between;
       gap: 8px;
       min-width: 0;
     }
     .shell__title-group {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
       min-width: 0;
       flex: 1 1 0;
     }
     .shell__title {
       margin: 0;
-      font-size: 24px;
+      font-size: 18px;
       font-weight: 700;
       font-family: Roboto, sans-serif;
       color: #0e2e4b;
@@ -191,7 +188,7 @@ import { WorkflowStudioStore } from '@app/services';
     }
     .shell__title-chevron {
       color: #818ea1;
-      font-size: 16px;
+      font-size: 13px;
       flex-shrink: 0;
     }
     /* Badge — dark navy pill, same visual weight as the action type
@@ -211,12 +208,13 @@ import { WorkflowStudioStore } from '@app/services';
       flex-shrink: 0;
     }
 
-    /* Row 3: action buttons */
+    /* Action buttons — now inline in title row */
     .shell__actions {
       display: flex;
       align-items: center;
-      justify-content: flex-end;
-      gap: 9px;
+      gap: 4px;
+      flex-shrink: 0;
+      margin-left: auto;
     }
     .shell__action {
       width: 24px;

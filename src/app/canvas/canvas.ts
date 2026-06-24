@@ -15,6 +15,7 @@ import { ActionPropertiesComponent } from '../properties/action-properties/actio
 import { StepPropertiesComponent } from '../properties/step-properties/step-properties.component';
 import { CanvasToolbar } from './canvas-toolbar';
 import { ActionLibraryPanel } from './action-library-panel';
+import { StepLibraryPanel } from './step-library-panel';
 import { StepCard } from './nodes/step-card';
 import { StepPickerCard } from './nodes/step-picker-card';
 import { WorkflowItemsPanel } from './workflow-items-panel';
@@ -42,9 +43,9 @@ const CARD_X = 80;
 const CARD_W = 460;
 const START_Y = 40;
 const CONNECTOR_W = 28;
-const CONNECTOR_GAP = 52;
+const CONNECTOR_GAP = 80;
 const CARD_H_COLLAPSED = 64;
-const PICKER_H = 308;
+const PICKER_H = 420;
 const stepHeight = (s: Step, expanded: boolean) =>
   expanded ? 118 + 52 * s.actions.length : CARD_H_COLLAPSED;
 
@@ -65,6 +66,7 @@ const ARROW_HALF_H = 20;
     StepCard,
     StepPickerCard,
     ActionLibraryPanel,
+    StepLibraryPanel,
     ActionPropertiesComponent,
     StepPropertiesComponent,
   ],
@@ -113,6 +115,10 @@ const ARROW_HALF_H = 20;
 
       @if (store.actionLibraryOpen()) {
         <ws-action-library-panel />
+      }
+
+      @if (store.stepLibraryOpen()) {
+        <ws-step-library-panel />
       }
 
       <!-- Tethered popover — position:fixed, moved via GPU-composited transform -->
@@ -189,7 +195,7 @@ const ARROW_HALF_H = 20;
       border: 1px dashed var(--ws-border-strong, #a9b3c2);
       border-radius: 8px;
     }
-    .ws-connector { display: flex; flex-direction: column; align-items: center; width: 28px; height: 52px; }
+    .ws-connector { display: flex; flex-direction: column; align-items: center; width: 28px; height: 80px; }
     .ws-connector__line { flex: 1 1 auto; width: 2px; background: var(--ws-border-strong, #a9b3c2); }
     .ws-connector__add {
       display: inline-flex;
