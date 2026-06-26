@@ -261,6 +261,14 @@ import { PreviewRuntime } from './preview-runtime.service';
     .w-full { width: 100%; }
     .flex-1 { flex: 1 1 0; }
 
+    :host ::ng-deep .p-inputtext,
+    :host ::ng-deep .p-select,
+    :host ::ng-deep .p-multiselect,
+    :host ::ng-deep .p-inputnumber-input,
+    :host ::ng-deep textarea.p-textarea {
+      border-color: var(--p-surface-400, #94a3b8) !important;
+    }
+
     .pa--error .pa__control,
     .pa--error input,
     .pa--error textarea {

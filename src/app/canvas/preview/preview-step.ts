@@ -152,7 +152,7 @@ import { PreviewStatusIcon } from './preview-status-icon';
 
     /* Expanded body */
     .ps__body {
-      background: #F7F8F9;
+      background: #fff;
       padding: 16px;
       display: flex;
       flex-direction: column;
