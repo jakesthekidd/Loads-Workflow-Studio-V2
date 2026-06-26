@@ -2,13 +2,15 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
   inject,
   input,
   signal,
+  untracked,
 } from '@angular/core';
 import { UpperCasePipe } from '@angular/common';
 import { Segment } from '@app/models';
-import { PreviewRuntime, type PreviewStepState } from './preview-runtime.service';
+import { PreviewRuntime } from './preview-runtime.service';
 import { type IconState, PreviewStatusIcon } from './preview-status-icon';
 import { PreviewStep } from './preview-step';
 
@@ -29,7 +31,7 @@ interface StepRow {
       <button
         class="seg__header"
         type="button"
-        (click)="expanded.update(v => !v)"
+        (click)="toggle()"
         [attr.aria-expanded]="expanded()"
       >
         <ws-preview-status-icon [state]="segmentStatus()" />
@@ -141,7 +143,41 @@ export class PreviewSegment {
   readonly segment = input.required<Segment>();
 
   protected readonly runtime = inject(PreviewRuntime);
-  protected readonly expanded = signal(true);
+
+  /** Manual override: null means let auto-behavior decide. */
+  private readonly _overrideExpanded = signal<boolean | null>(null);
+
+  /**
+   * Auto-expand when this segment contains the active step.
+   * Auto-collapse when all steps are done.
+   * Manual tap overrides until the next auto-state change.
+   */
+  protected readonly expanded = computed(() => {
+    const override = this._overrideExpanded();
+    if (override !== null) return override;
+    const activeId = this.runtime.activeStepId();
+    const rows = this.visibleRows();
+    if (activeId && rows.some(r => r.step.id === activeId)) return true;
+    if (rows.length > 0 && rows.every(r => this.runtime.isDone(r.step.id))) return false;
+    return false;
+  });
+
+  /** Clear override when active step enters or leaves this segment so auto takes over. */
+  constructor() {
+    effect(() => {
+    const activeId = this.runtime.activeStepId();
+    const rows = this.visibleRows();
+    const hasActive = !!activeId && rows.some(r => r.step.id === activeId);
+    const allDone = rows.length > 0 && rows.every(r => this.runtime.isDone(r.step.id));
+    if (hasActive || allDone) {
+      untracked(() => this._overrideExpanded.set(null));
+    }
+    });
+  }
+
+  protected toggle(): void {
+    this._overrideExpanded.set(!this.expanded());
+  }
 
   protected readonly visibleRows = computed<StepRow[]>(() => {
     const steps = this.segment().steps;
@@ -171,9 +207,10 @@ export class PreviewSegment {
   );
 
   protected readonly segmentStatus = computed<IconState>(() => {
-    if (this.hasActiveStep()) return 'active';
+    const activeId = this.runtime.activeStepId();
     const rows = this.visibleRows();
+    if (activeId && rows.some(r => r.step.id === activeId)) return 'active';
     if (rows.length > 0 && this.doneCount() === rows.length) return 'done';
-    return 'locked';
+    return 'notDone';
   });
 }

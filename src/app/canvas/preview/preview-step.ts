@@ -225,13 +225,21 @@ export class PreviewStep {
     this.runtime.stepState(this.step(), this.isFirst(), this.prevDone()),
   );
 
-  /** Visual-only: active steps show gray ring until the user opens them. */
+  /**
+   * A step is visually "active" only when it is the focused step.
+   * All other available steps show as "notDone" (gray ring, not started).
+   */
   protected readonly displayState = computed(() => {
     const s = this.state();
-    return s === 'active' && !this.expanded() ? 'notDone' : s;
+    if (s === 'active' && this.runtime.activeStepId() !== this.step().id) return 'notDone';
+    return s;
   });
 
-  protected readonly expanded = signal(true);
+  /** Expanded when this step is the active one in the runtime. */
+  protected readonly expanded = computed(() =>
+    this.runtime.activeStepId() === this.step().id,
+  );
+
   protected readonly submitFailed = signal(false);
 
   protected readonly visibleActions = computed(() =>
@@ -243,12 +251,14 @@ export class PreviewStep {
   );
 
   protected toggleExpand(): void {
-    this.expanded.update(v => !v);
+    const id = this.step().id;
+    // Toggle: close if already active, otherwise make this the active step
+    this.runtime.setActiveStep(this.runtime.activeStepId() === id ? null : id);
   }
 
   protected submit(): void {
     const ok = this.runtime.submitStep(this.step());
     this.submitFailed.set(!ok);
-    if (ok) this.expanded.set(false);
+    // On success: runtime advances activeStepId → expanded computed updates automatically
   }
 }
