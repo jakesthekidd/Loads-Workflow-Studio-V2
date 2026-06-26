@@ -93,6 +93,8 @@ export class WorkflowStudioStore {
   readonly panelOpen = signal(true);
   /** Id of the node whose properties panel is currently open (null = closed). */
   readonly propertiesPanelId = signal<string | null>(null);
+  /** Scroll target requested when opening the panel — cleared after the scroll fires. */
+  readonly propertiesPanelScrollTarget = signal<'conditions' | null>(null);
   /** Insertion index in the current segment where the step picker is open (null = closed). */
   readonly pickerIndex = signal<number | null>(null);
   /** Whether the action library panel is open. */
@@ -101,6 +103,8 @@ export class WorkflowStudioStore {
   readonly actionLibraryTargetStepId = signal<string | null>(null);
   /** Whether the step template library panel is open. */
   readonly stepLibraryOpen = signal(false);
+  /** Whether the mobile workflow preview modal is open. */
+  readonly previewOpen = signal(false);
   /** CSS class applied to the content wrapper to trigger directional slide animation. */
   readonly panelNavAnimClass = signal<string>('');
   /** True while the panel close animation is playing (before DOM removal). */
@@ -231,6 +235,26 @@ export class WorkflowStudioStore {
     this.expandedIds.set(next);
   }
 
+  readonly allExpanded = computed<boolean>(() => {
+    const ids = this.expandedIds();
+    return this.segments().every(
+      seg => ids.has(seg.id) && seg.steps.every(step => ids.has(step.id)),
+    );
+  });
+
+  expandAll(): void {
+    const ids = new Set<string>();
+    for (const seg of this.segments()) {
+      ids.add(seg.id);
+      for (const step of seg.steps) ids.add(step.id);
+    }
+    this.expandedIds.set(ids);
+  }
+
+  collapseAll(): void {
+    this.expandedIds.set(new Set());
+  }
+
   /** Move a step within a segment from `from` index to `to` index. */
   reorderStep(segmentId: string, from: number, to: number): void {
     if (from === to) return;
@@ -268,6 +292,12 @@ export class WorkflowStudioStore {
     });
   }
 
+  /** Open the properties panel and auto-scroll to the Conditions section. */
+  openConditions(id: string): void {
+    this.openProperties(id);
+    this.propertiesPanelScrollTarget.set('conditions');
+  }
+
   /** Open the properties panel for the given node id and also select it. */
   openProperties(id: string): void {
     // Cancel any pending close animation so re-opening the same panel doesn't
@@ -303,6 +333,7 @@ export class WorkflowStudioStore {
       this.propertiesPanelId.set(null);
       this.panelNavAnimClass.set('');
       this.panelClosing.set(false);
+      this.propertiesPanelScrollTarget.set(null);
       this._closeTimeout = null;
     }, 200);
   }
@@ -360,6 +391,48 @@ export class WorkflowStudioStore {
     });
   }
 
+  updateSegmentLabel(segmentId: string, label: string): void {
+    const wf = this.workflow();
+    if (!wf) return;
+    this.workflow.set({
+      ...wf,
+      segments: wf.segments.map((seg) =>
+        seg.id === segmentId ? { ...seg, label } : seg,
+      ),
+    });
+  }
+
+  updateStepLabel(stepId: string, label: string): void {
+    const wf = this.workflow();
+    if (!wf) return;
+    this.workflow.set({
+      ...wf,
+      segments: wf.segments.map((seg) => ({
+        ...seg,
+        steps: seg.steps.map((step) =>
+          step.id === stepId ? { ...step, label } : step,
+        ),
+      })),
+    });
+  }
+
+  updateActionLabel(actionId: string, label: string): void {
+    const wf = this.workflow();
+    if (!wf) return;
+    this.workflow.set({
+      ...wf,
+      segments: wf.segments.map((seg) => ({
+        ...seg,
+        steps: seg.steps.map((step) => ({
+          ...step,
+          actions: step.actions.map((a) =>
+            a.id === actionId ? { ...a, label } : a,
+          ),
+        })),
+      })),
+    });
+  }
+
   setPanelOpen(open: boolean): void {
     this.panelOpen.set(open);
   }
@@ -403,6 +476,9 @@ export class WorkflowStudioStore {
   }
 
   // ---- step library -------------------------------------------------------
+
+  openPreview(): void  { this.previewOpen.set(true); }
+  closePreview(): void { this.previewOpen.set(false); }
 
   openStepLibrary(): void {
     this.actionLibraryOpen.set(false);

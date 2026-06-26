@@ -2,13 +2,15 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
   ElementRef,
   HostListener,
   inject,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
-import { FFlowModule } from '@foblex/flow';
+import { FCanvasComponent, FFlowModule } from '@foblex/flow';
 import { NodeKind, Step } from '@app/models';
 import { WorkflowStudioStore } from '@app/services';
 import { ActionPropertiesComponent } from '../properties/action-properties/action-properties.component';
@@ -19,6 +21,7 @@ import { StepLibraryPanel } from './step-library-panel';
 import { StepCard } from './nodes/step-card';
 import { StepPickerCard } from './nodes/step-picker-card';
 import { WorkflowItemsPanel } from './workflow-items-panel';
+import { PreviewShell } from './preview/preview-shell';
 
 interface LayoutItem {
   readonly kind: 'card' | 'connector' | 'empty' | 'picker';
@@ -69,6 +72,7 @@ const ARROW_HALF_H = 20;
     StepLibraryPanel,
     ActionPropertiesComponent,
     StepPropertiesComponent,
+    PreviewShell,
   ],
   template: `
     <div #canvasRoot class="ws-canvas">
@@ -119,6 +123,10 @@ const ARROW_HALF_H = 20;
 
       @if (store.stepLibraryOpen()) {
         <ws-step-library-panel />
+      }
+
+      @if (store.previewOpen()) {
+        <ws-preview-shell />
       }
 
       <!-- Tethered popover — position:fixed, moved via GPU-composited transform -->
@@ -327,7 +335,13 @@ export class Canvas {
   protected readonly NodeKind = NodeKind;
 
   private readonly canvasRoot = viewChild<ElementRef<HTMLElement>>('canvasRoot');
+  private readonly fCanvas = viewChild(FCanvasComponent);
   private readonly canvasTransform = signal<CanvasTransform>({ x: 0, y: 0, scale: 1 });
+
+  private readonly _scrollEffect = effect(() => {
+    const id = this.store.selectedId();
+    untracked(() => this.scrollToSelected(id));
+  });
 
   protected readonly layout = computed<LayoutItem[]>(() => {
     const seg = this.store.currentSegment();
@@ -443,5 +457,16 @@ export class Canvas {
   @HostListener('window:resize')
   protected onResize(): void {
     this.canvasTransform.update(t => ({ ...t }));
+  }
+
+  private scrollToSelected(id: string | null): void {
+    if (!id) return;
+    const resolved = this.store.resolveItem(id);
+    if (!resolved || resolved.kind === NodeKind.Segment) return;
+    const stepId = resolved.kind === NodeKind.Action ? resolved.step?.id : id;
+    if (!stepId) return;
+    // Guard: step must be in the current segment's layout
+    if (!this.layout().some(l => l.id === stepId && l.kind === 'card')) return;
+    this.fCanvas()?.centerGroupOrNode(stepId, false);
   }
 }

@@ -1,10 +1,14 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  effect,
+  ElementRef,
   inject,
   input,
   OnChanges,
   signal,
+  untracked,
+  viewChild,
 } from '@angular/core';
 import {
   BlockingCondition,
@@ -60,6 +64,7 @@ function draftFromStep(step: Step): StepDraft {
   template: `
     <ws-panel-shell
       [title]="step().label"
+      (titleChanged)="store.updateStepLabel(step().id, $event)"
       (save)="onSave()"
       (cancel)="store.closeProperties()"
     >
@@ -91,6 +96,18 @@ export class StepPropertiesComponent implements OnChanges {
   protected readonly store = inject(WorkflowStudioStore);
 
   readonly step = input.required<Step>();
+
+  private readonly conditionsRef = viewChild(ConditionsSectionComponent, { read: ElementRef });
+
+  constructor() {
+    effect(() => {
+      if (this.store.propertiesPanelScrollTarget() !== 'conditions') return;
+      const el = this.conditionsRef();
+      if (!el) return;
+      untracked(() => this.store.propertiesPanelScrollTarget.set(null));
+      setTimeout(() => el.nativeElement.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
+    });
+  }
 
   protected readonly draft = signal<StepDraft>({ required: false, visible: true, enforcedOrder: false, makePrompt: false, form: false, statusMessageEnabled: false, selectedMessages: [], condition: undefined, blocker: undefined });
 

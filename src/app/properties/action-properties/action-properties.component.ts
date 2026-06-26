@@ -2,10 +2,14 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
+  ElementRef,
   inject,
   input,
   OnChanges,
   signal,
+  untracked,
+  viewChild,
 } from '@angular/core';
 import {
   AcceptWorkflowConfig,
@@ -114,6 +118,7 @@ const NO_REQUIRED_TYPES = new Set<ActionType>([
     <ws-panel-shell
       [title]="action().label"
       [typeBadge]="typeBadge()"
+      (titleChanged)="store.updateActionLabel(action().id, $event)"
       (save)="onSave()"
       (cancel)="store.closeProperties()"
     >
@@ -355,6 +360,18 @@ export class ActionPropertiesComponent implements OnChanges {
 
   readonly action = input.required<Action>();
   readonly step = input.required<Step>();
+
+  private readonly conditionsRef = viewChild(ConditionsSectionComponent, { read: ElementRef });
+
+  constructor() {
+    effect(() => {
+      if (this.store.propertiesPanelScrollTarget() !== 'conditions') return;
+      const el = this.conditionsRef();
+      if (!el) return;
+      untracked(() => this.store.propertiesPanelScrollTarget.set(null));
+      setTimeout(() => el.nativeElement.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
+    });
+  }
 
   protected readonly typeBadge = () =>
     ACTION_TYPE_CATALOG[this.action().config.actionType]?.label ?? '';

@@ -1,17 +1,18 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { ActionCategory, categoryOf, Action } from '@app/models';
 import { WorkflowStudioStore } from '@app/services';
+import { EditableLabelComponent } from '../properties/shared/editable-label/editable-label.component';
 
 /**
  * Open "Workflow Items" tree — the docked left column (Figma 15199-78106).
  * Renders the full Segment ▸ Step ▸ Action hierarchy; selecting any node sets
  * the shared selection (scopes the canvas + highlights there too). Navigation is
  * through the tree — there is no workflow dropdown.
- * // TODO (Phase N): reorder via drag, kebab actions, rename.
  */
 @Component({
   selector: 'ws-workflow-items-tree',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [EditableLabelComponent],
   template: `
     <aside class="ws-tree">
       <header class="ws-tree__head">
@@ -24,7 +25,17 @@ import { WorkflowStudioStore } from '@app/services';
         </button>
       </header>
 
-      <div class="ws-tree__caption">Workflow Items</div>
+      <div class="ws-tree__caption">
+        <span>Workflow Items</span>
+        <div class="ws-tree__expand-controls">
+          <button class="ws-tree__expand-btn" type="button" aria-label="Expand all" (click)="store.expandAll()">
+            <i class="pi pi-expand"></i>
+          </button>
+          <button class="ws-tree__expand-btn" type="button" aria-label="Collapse all" (click)="store.collapseAll()">
+            <i class="pi pi-arrow-down-left-and-arrow-up-right-to-center"></i>
+          </button>
+        </div>
+      </div>
 
       <div class="ws-tree__list" role="tree">
         @for (seg of store.segments(); track seg.id) {
@@ -40,7 +51,14 @@ import { WorkflowStudioStore } from '@app/services';
             <button class="ws-row__chev" type="button" (click)="$event.stopPropagation(); store.toggleExpand(seg.id)" aria-label="Toggle segment">
               <i class="pi" [class.pi-chevron-down]="store.isExpanded(seg.id)" [class.pi-chevron-right]="!store.isExpanded(seg.id)"></i>
             </button>
-            <span class="ws-row__label">{{ seg.label }}</span>
+            <span class="ws-row__label" (dblclick)="$event.stopPropagation(); editingId.set(seg.id)">
+              <ws-editable-label
+                [value]="seg.label"
+                [editMode]="editingId() === seg.id"
+                (confirmed)="store.updateSegmentLabel(seg.id, $event); editingId.set(null)"
+                (cancelled)="editingId.set(null)"
+              >{{ seg.label }}</ws-editable-label>
+            </span>
             <i class="ws-row__kind pi pi-th-large" aria-hidden="true"></i>
             <button class="ws-row__kebab" type="button" (click)="$event.stopPropagation(); store.openProperties(seg.id)" aria-label="Segment properties"><i class="pi pi-ellipsis-v"></i></button>
           </div>
@@ -57,7 +75,14 @@ import { WorkflowStudioStore } from '@app/services';
                     <button class="ws-row__chev" type="button" (click)="$event.stopPropagation(); store.toggleExpand(step.id)" aria-label="Toggle step">
                   <i class="pi" [class.pi-chevron-down]="store.isExpanded(step.id)" [class.pi-chevron-right]="!store.isExpanded(step.id)"></i>
                 </button>
-                <span class="ws-row__label">{{ step.label }}</span>
+                <span class="ws-row__label" (dblclick)="$event.stopPropagation(); editingId.set(step.id)">
+                  <ws-editable-label
+                    [value]="step.label"
+                    [editMode]="editingId() === step.id"
+                    (confirmed)="store.updateStepLabel(step.id, $event); editingId.set(null)"
+                    (cancelled)="editingId.set(null)"
+                  >{{ step.label }}</ws-editable-label>
+                </span>
                 <i class="ws-row__kind pi pi-list" aria-hidden="true"></i>
                 <button class="ws-row__kebab" type="button" (click)="$event.stopPropagation(); store.openProperties(step.id)" aria-label="Step properties"><i class="pi pi-ellipsis-v"></i></button>
               </div>
@@ -72,7 +97,14 @@ import { WorkflowStudioStore } from '@app/services';
                     (click)="store.select(action.id)"
                   >
                             <span class="ws-row__chev"></span>
-                    <span class="ws-row__label">{{ action.label }}</span>
+                    <span class="ws-row__label" (dblclick)="$event.stopPropagation(); editingId.set(action.id)">
+                      <ws-editable-label
+                        [value]="action.label"
+                        [editMode]="editingId() === action.id"
+                        (confirmed)="store.updateActionLabel(action.id, $event); editingId.set(null)"
+                        (cancelled)="editingId.set(null)"
+                      >{{ action.label }}</ws-editable-label>
+                    </span>
                     <i class="ws-row__kind pi" [class.pi-pencil]="isInput(action)" [class.pi-bolt]="!isInput(action)" aria-hidden="true"></i>
                     <button class="ws-row__kebab" type="button" (click)="$event.stopPropagation(); store.openProperties(action.id)" aria-label="Action properties"><i class="pi pi-ellipsis-v"></i></button>
                   </div>
@@ -124,12 +156,30 @@ import { WorkflowStudioStore } from '@app/services';
     }
     .ws-tree__collapse:hover { background: var(--ws-hover, #eef1f6); }
     .ws-tree__caption {
-      padding: 4px 16px 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 8px 8px 16px;
       font-size: 12px;
       font-weight: 600;
       letter-spacing: 0.2px;
       color: var(--ws-text-muted, #5a626f);
     }
+    .ws-tree__expand-controls { display: flex; gap: 2px; }
+    .ws-tree__expand-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border: none;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--ws-text-muted, #5a626f);
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .ws-tree__expand-btn:hover { background: var(--ws-hover, #eef1f6); color: var(--ws-text, #1b2330); }
     .ws-tree__list { flex: 1 1 auto; overflow-y: auto; padding-bottom: 8px; }
 
     .ws-row {
@@ -202,6 +252,7 @@ import { WorkflowStudioStore } from '@app/services';
 })
 export class WorkflowItemsTree {
   protected readonly store = inject(WorkflowStudioStore);
+  protected readonly editingId = signal<string | null>(null);
 
   protected isInput(action: Action): boolean {
     return categoryOf(action.config.actionType) === ActionCategory.Input;

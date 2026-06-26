@@ -4,13 +4,16 @@ import {
   inject,
   input,
   output,
+  signal,
 } from '@angular/core';
 import { NodeKind } from '@app/models';
 import { WorkflowStudioStore } from '@app/services';
+import { EditableLabelComponent } from '../editable-label/editable-label.component';
 
 @Component({
   selector: 'ws-panel-shell',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [EditableLabelComponent],
   template: `
     <div class="shell">
 
@@ -42,9 +45,18 @@ import { WorkflowStudioStore } from '@app/services';
 
         <!-- Row 2: title + badge + action buttons all inline -->
         <div class="shell__title-row">
-          <div class="shell__title-group">
-            <h2 class="shell__title">{{ title() }}</h2>
-            <i class="shell__title-chevron pi pi-angle-down"></i>
+          <div class="shell__title-group" (dblclick)="titleEditMode.set(true)">
+            <h2 class="shell__title">
+              <ws-editable-label
+                [value]="title()"
+                [editMode]="titleEditMode()"
+                (confirmed)="onTitleConfirmed($event)"
+                (cancelled)="titleEditMode.set(false)"
+              >{{ title() }}</ws-editable-label>
+            </h2>
+            @if (!titleEditMode()) {
+              <i class="shell__title-edit-hint pi pi-pencil" aria-hidden="true"></i>
+            }
           </div>
           @if (typeBadge()) {
             <span class="shell__badge">{{ typeBadge() }}</span>
@@ -174,6 +186,24 @@ import { WorkflowStudioStore } from '@app/services';
       gap: 6px;
       min-width: 0;
       flex: 1 1 0;
+      cursor: text;
+      border-radius: 4px;
+      padding: 2px 4px;
+      margin: -2px -4px;
+      transition: background 120ms ease;
+    }
+    .shell__title-group:hover {
+      background: #eaeff5;
+    }
+    .shell__title-edit-hint {
+      color: #818ea1;
+      font-size: 12px;
+      flex-shrink: 0;
+      opacity: 0;
+      transition: opacity 120ms ease;
+    }
+    .shell__title-group:hover .shell__title-edit-hint {
+      opacity: 1;
     }
     .shell__title {
       margin: 0;
@@ -185,11 +215,6 @@ import { WorkflowStudioStore } from '@app/services';
       overflow: hidden;
       text-overflow: ellipsis;
       min-width: 0;
-    }
-    .shell__title-chevron {
-      color: #818ea1;
-      font-size: 13px;
-      flex-shrink: 0;
     }
     /* Badge — dark navy pill, same visual weight as the action type
        tags on the step card rows (matches bg: #0e2e4b spec from Figma) */
@@ -296,4 +321,14 @@ export class PanelShellComponent {
   readonly saveTemplate = output<void>();
   readonly duplicate = output<void>();
   readonly delete = output<void>();
+  readonly titleChanged = output<string>();
+
+  protected readonly titleEditMode = signal(false);
+
+  protected onTitleConfirmed(label: string): void {
+    this.titleEditMode.set(false);
+    if (label !== this.title()) {
+      this.titleChanged.emit(label);
+    }
+  }
 }

@@ -22,7 +22,7 @@ import { WorkflowStudioStore } from '@app/services';
             [class.cond-btn--blk]="hasBlocker() && !hasCondition()"
             [class.cond-btn--both]="hasCondition() && hasBlocker()"
             [title]="condBtnTitle()"
-            (click)="store.openProperties(step().id)"
+            (click)="store.openConditions(step().id)"
           >
             @if (hasCondition() && hasBlocker()) {
               <i class="pi pi-share-alt cond-icon--cond"></i>
@@ -59,7 +59,7 @@ import { WorkflowStudioStore } from '@app/services';
                 [class.cond-btn--blk]="actionHasBlocker(action) && !actionHasCondition(action)"
                 [class.cond-btn--both]="actionHasCondition(action) && actionHasBlocker(action)"
                 [title]="actionCondTitle(action)"
-                (click)="$event.stopPropagation(); store.openProperties(action.id)"
+                (click)="$event.stopPropagation(); store.openConditions(action.id)"
               >
                 @if (actionHasCondition(action) && actionHasBlocker(action)) {
                   <i class="pi pi-share-alt cond-icon--cond"></i>

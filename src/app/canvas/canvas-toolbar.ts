@@ -24,7 +24,13 @@ import { WorkflowStudioStore } from '@app/services';
         @if (!collapsed()) {
           <!-- View + add-pickers -->
           <div class="ws-toolbar__group">
-            <button class="ws-toolbar__icon" type="button" aria-label="Preview">
+            <button
+              class="ws-toolbar__icon"
+              [class.ws-toolbar__icon--active]="store.previewOpen()"
+              type="button"
+              aria-label="Preview"
+              (click)="store.previewOpen() ? store.closePreview() : store.openPreview()"
+            >
               <i class="pi pi-eye"></i>
             </button>
             <button
@@ -44,9 +50,6 @@ import { WorkflowStudioStore } from '@app/services';
               (click)="toggleActionLibrary()"
             >
               <i class="pi pi-th-large"></i>
-            </button>
-            <button class="ws-toolbar__icon" type="button" aria-label="Connections">
-              <i class="pi pi-share-alt"></i>
             </button>
           </div>
 
