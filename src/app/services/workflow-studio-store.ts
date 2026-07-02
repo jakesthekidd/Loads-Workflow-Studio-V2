@@ -1,6 +1,7 @@
 import { computed, inject, Injectable, signal } from '@angular/core';
 import {
   Action,
+  ActionCategory,
   ActionConfig,
   ACTION_TYPE_CATALOG,
   ActionType,
@@ -101,6 +102,8 @@ export class WorkflowStudioStore {
   readonly actionLibraryOpen = signal(false);
   /** The step id that opened the action library (null = opened from toolbar, drag-only). */
   readonly actionLibraryTargetStepId = signal<string | null>(null);
+  /** Which category to pre-expand when the library opens (null = expand both). */
+  readonly actionLibraryInitialCategory = signal<ActionCategory | null>(null);
   /** Whether the step template library panel is open. */
   readonly stepLibraryOpen = signal(false);
   /** Whether the mobile workflow preview modal is open. */
@@ -489,15 +492,17 @@ export class WorkflowStudioStore {
 
   // ---- action library -----------------------------------------------------
 
-  openActionLibrary(stepId: string | null): void {
+  openActionLibrary(stepId: string | null, category?: ActionCategory): void {
     this.stepLibraryOpen.set(false);
     this.actionLibraryTargetStepId.set(stepId);
+    this.actionLibraryInitialCategory.set(category ?? null);
     this.actionLibraryOpen.set(true);
   }
 
   closeActionLibrary(): void {
     this.actionLibraryOpen.set(false);
     this.actionLibraryTargetStepId.set(null);
+    this.actionLibraryInitialCategory.set(null);
   }
 
   addAction(stepId: string, type: ActionType): void {

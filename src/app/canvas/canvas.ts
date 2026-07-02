@@ -1,4 +1,5 @@
 import {
+  AfterViewInit,
   ChangeDetectionStrategy,
   Component,
   computed,
@@ -6,12 +7,14 @@ import {
   ElementRef,
   HostListener,
   inject,
+  NgZone,
+  OnDestroy,
   signal,
   untracked,
   viewChild,
 } from '@angular/core';
 import { FCanvasComponent, FFlowModule } from '@foblex/flow';
-import { NodeKind, Step } from '@app/models';
+import { ACTION_TYPE_CATALOG, ActionCategory, NodeKind, Step } from '@app/models';
 import { WorkflowStudioStore } from '@app/services';
 import { ActionPropertiesComponent } from '../properties/action-properties/action-properties.component';
 import { StepPropertiesComponent } from '../properties/step-properties/step-properties.component';
@@ -49,8 +52,16 @@ const CONNECTOR_W = 28;
 const CONNECTOR_GAP = 80;
 const CARD_H_COLLAPSED = 64;
 const PICKER_H = 420;
-const stepHeight = (s: Step, expanded: boolean) =>
-  expanded ? 118 + 52 * s.actions.length : CARD_H_COLLAPSED;
+const CARD_H_FLIP_BTN = 52; // flip toggle button: 44px height + 8px margin-top
+const stepHeight = (s: Step, expanded: boolean): number => {
+  if (!expanded) return CARD_H_COLLAPSED;
+  const frontCount = s.actions.filter(
+    a => ACTION_TYPE_CATALOG[a.config.actionType]?.category === ActionCategory.Input,
+  ).length;
+  const backCount = s.actions.length - frontCount;
+  // Card height driven by the larger face so Foblex layout never needs to reflow on flip.
+  return 118 + CARD_H_FLIP_BTN + 52 * Math.max(frontCount, backCount);
+};
 
 // Step-card internal geometry (from step-card.ts styles)
 // border(1) + padding-top(12) + header-height(40) + rows-margin-top(8)
@@ -330,16 +341,65 @@ const ARROW_HALF_H = 20;
     }
   `,
 })
-export class Canvas {
+export class Canvas implements AfterViewInit, OnDestroy {
   protected readonly store = inject(WorkflowStudioStore);
   protected readonly NodeKind = NodeKind;
 
+  private readonly zone = inject(NgZone);
   private readonly canvasRoot = viewChild<ElementRef<HTMLElement>>('canvasRoot');
   private readonly fCanvas = viewChild(FCanvasComponent);
   private readonly canvasTransform = signal<CanvasTransform>({ x: 0, y: 0, scale: 1 });
 
+  // Capture-phase wheel handler — intercepts before Foblex's bubble-phase listener on f-flow.
+  // Two-finger scroll (no ctrlKey) → pan; pinch (ctrlKey) → zoom at cursor.
+  private readonly _wheelHandler = (e: WheelEvent): void => {
+    e.preventDefault();
+    e.stopPropagation();
+    const canvas = this.fCanvas();
+    if (!canvas) return;
+    if (e.ctrlKey || e.metaKey) {
+      this._applyZoom(e, canvas);
+    } else {
+      this._applyPan(e, canvas);
+    }
+  };
+
+  ngAfterViewInit(): void {
+    this.zone.runOutsideAngular(() => {
+      this.canvasRoot()?.nativeElement.addEventListener('wheel', this._wheelHandler, {
+        capture: true,
+        passive: false,
+      });
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.canvasRoot()?.nativeElement.removeEventListener('wheel', this._wheelHandler, {
+      capture: true,
+    });
+  }
+
+  private _applyPan(e: WheelEvent, canvas: FCanvasComponent): void {
+    const { x, y } = canvas.transform.position;
+    canvas._setPosition({ x: x - e.deltaX, y: y - e.deltaY });
+    canvas.redraw();
+    canvas.emitCanvasChangeEvent();
+  }
+
+  private _applyZoom(e: WheelEvent, canvas: FCanvasComponent): void {
+    const el = this.canvasRoot()?.nativeElement;
+    if (!el) return;
+    const currentScale = canvas.transform.scale;
+    const newScale = Math.max(0.1, Math.min(4, currentScale * Math.exp(-e.deltaY * 0.01)));
+    const rect = el.getBoundingClientRect();
+    canvas.setScale(newScale, { x: e.clientX - rect.left, y: e.clientY - rect.top });
+    canvas.redraw();
+    canvas.emitCanvasChangeEvent();
+  }
+
   private readonly _scrollEffect = effect(() => {
     const id = this.store.selectedId();
+    this.store.propertiesPanelId(); // reactive dep: re-fire when panel opens/changes
     untracked(() => this.scrollToSelected(id));
   });
 
@@ -423,7 +483,16 @@ export class Canvas {
     // then express as offset from panel top (arrowOffsetY + ARROW_HALF_H = tip viewport Y)
     let canvasRowMidY: number;
     if (resolved.kind === NodeKind.Action && resolved.step) {
-      const actionIdx = resolved.step.actions.findIndex(a => a.id === id);
+      // Row index must be relative to the visible face (front = Input, back = NonInput)
+      // because each face only shows its own category's rows.
+      const action = resolved.step.actions.find(a => a.id === id);
+      const actionCat = action ? ACTION_TYPE_CATALOG[action.config.actionType]?.category : undefined;
+      const faceActions = actionCat !== undefined
+        ? resolved.step.actions.filter(
+            a => ACTION_TYPE_CATALOG[a.config.actionType]?.category === actionCat,
+          )
+        : resolved.step.actions;
+      const actionIdx = faceActions.findIndex(a => a.id === id);
       // CARD_ROWS_START_Y = border(1) + pad(12) + header(40) + rows-margin(8)
       canvasRowMidY = CARD_ROWS_START_Y + Math.max(0, actionIdx) * (ACTION_ROW_H + ACTION_GAP) + ACTION_ROW_H / 2;
     } else {
@@ -456,7 +525,7 @@ export class Canvas {
 
   @HostListener('window:resize')
   protected onResize(): void {
-    this.canvasTransform.update(t => ({ ...t }));
+    this.canvasTransform.update((t: CanvasTransform) => ({ ...t }));
   }
 
   private scrollToSelected(id: string | null): void {
@@ -465,8 +534,51 @@ export class Canvas {
     if (!resolved || resolved.kind === NodeKind.Segment) return;
     const stepId = resolved.kind === NodeKind.Action ? resolved.step?.id : id;
     if (!stepId) return;
-    // Guard: step must be in the current segment's layout
     if (!this.layout().some(l => l.id === stepId && l.kind === 'card')) return;
+
+    // When the properties panel is open for this step (or an action on it),
+    // center the card+panel assembly together so the panel is never clipped.
+    const panelId = this.store.propertiesPanelId();
+    if (panelId) {
+      const panelResolved = this.store.resolveItem(panelId);
+      const panelStepId = panelResolved?.kind === NodeKind.Action
+        ? panelResolved.step?.id
+        : (panelResolved?.kind === NodeKind.Step ? panelId : null);
+      if (panelStepId === stepId) {
+        this._centerWithPanelOffset(stepId);
+        return;
+      }
+    }
+
     this.fCanvas()?.centerGroupOrNode(stepId, false);
+  }
+
+  private _centerWithPanelOffset(stepId: string): void {
+    const item = this.layout().find(l => l.id === stepId && l.kind === 'card');
+    if (!item) return;
+    const el = this.canvasRoot()?.nativeElement;
+    if (!el) return;
+    const canvas = this.fCanvas();
+    if (!canvas) return;
+
+    const rect = el.getBoundingClientRect();
+    const { scale } = canvas.transform;
+    // Popover assembly: 40px arrow + 438px panel card
+    const PANEL_W = 40 + 438;
+
+    // Horizontally center the card + panel assembly in the canvas element.
+    // Derivation matches popoverAnchor: viewport_x = rect.left + node.x*scale + transform.x
+    const tx = rect.width / 2
+      - item.position.x * scale
+      - (CARD_W * scale + PANEL_W) / 2;
+    // Vertically anchor the card top at ~15% from the canvas top edge so the
+    // properties panel has the remaining ~85% of canvas height to expand into.
+    const ty = rect.height * 0.15 - item.position.y * scale;
+
+    // Directly mutate the public ITransformModel (same pattern as InputCanvasPosition handler)
+    canvas.transform.position = { x: tx, y: ty };
+    canvas.transform.scaledPosition = { x: 0, y: 0 };
+    canvas.redraw();
+    canvas.emitCanvasChangeEvent(); // keeps canvasTransform() in sync for popoverAnchor
   }
 }

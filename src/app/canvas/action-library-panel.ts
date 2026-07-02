@@ -260,8 +260,15 @@ export class ActionLibraryPanel {
   protected readonly store = inject(WorkflowStudioStore);
 
   protected readonly search = signal('');
-  protected readonly formOpen = signal(true);
-  protected readonly backendOpen = signal(true);
+
+  // Initialized from store when the panel first mounts (the panel is created fresh
+  // on each open via @if, so this runs per-open). User can still toggle manually.
+  protected readonly formOpen = signal(
+    this.store.actionLibraryInitialCategory() !== ActionCategory.NonInput,
+  );
+  protected readonly backendOpen = signal(
+    this.store.actionLibraryInitialCategory() !== ActionCategory.Input,
+  );
 
   protected readonly formComponents = computed<readonly ActionTypeCatalogEntry[]>(() => {
     const q = this.search().toLowerCase();
